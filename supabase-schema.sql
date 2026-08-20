@@ -1,6 +1,8 @@
 -- Run this once in your Supabase project's SQL Editor (Database > SQL Editor).
--- It creates the habits table and locks it down so each account can only
--- ever see or modify its own rows.
+-- It creates all tables this app needs and locks each one down with
+-- row-level security appropriate to what it's for.
+
+-- ---------- habits ----------
 
 create table if not exists public.habits (
   id uuid primary key default gen_random_uuid(),
@@ -31,36 +33,8 @@ create policy "Users can delete their own habits"
   on public.habits for delete
   using (auth.uid() = user_id);
 
--- ---------- global chat ----------
-
-create table if not exists public.messages (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  user_email text not null,
-  content text not null check (char_length(content) <= 500),
-  created_at timestamptz not null default now()
-);
-
-create index if not exists messages_created_at_idx on public.messages(created_at);
-
-alter table public.messages enable row level security;
-
--- The chat is visible to every visitor, signed in or not.
-create policy "Anyone can view messages"
-  on public.messages for select
-  using (true);
-
--- Only signed-in users can post, and only ever as themselves.
-create policy "Signed-in users can send messages"
-  on public.messages for insert
-  with check (auth.uid() = user_id);
-
--- No update/delete policies on purpose — messages are permanent once sent.
-
--- Enable realtime so new messages appear live without anyone refreshing.
-alter publication supabase_realtime add table public.messages;
-
 -- ---------- admin (chat moderation) ----------
+-- Created before `messages` so its policies can reference this table.
 
 create table if not exists public.admins (
   user_id uuid primary key references auth.users(id) on delete cascade,
@@ -75,15 +49,54 @@ create policy "Users can check their own admin status"
   on public.admins for select
   using (auth.uid() = user_id);
 
+-- ---------- global chat ----------
+
+create table if not exists public.messages (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  user_email text not null,
+  content text not null check (char_length(content) <= 500),
+  is_admin boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists messages_created_at_idx on public.messages(created_at);
+
+alter table public.messages enable row level security;
+
+-- The chat is visible to every visitor, signed in or not.
+create policy "Anyone can view messages"
+  on public.messages for select
+  using (true);
+
+-- Only signed-in users can post, and only ever as themselves. The
+-- is_admin flag can only be set true if the sender is actually listed in
+-- `admins` — checked here, in the database, so it can't be spoofed by
+-- calling the API directly with is_admin: true.
+create policy "Signed-in users can send messages"
+  on public.messages for insert
+  with check (
+    auth.uid() = user_id
+    and (
+      is_admin = false
+      or exists (select 1 from public.admins where admins.user_id = auth.uid())
+    )
+  );
+
 -- Admins can delete any chat message — individually, or all at once.
 create policy "Admins can delete messages"
   on public.messages for delete
   using (
-    exists (
-      select 1 from public.admins where admins.user_id = auth.uid()
-    )
+    exists (select 1 from public.admins where admins.user_id = auth.uid())
   );
 
--- To make an account an admin, find its user id (Authentication -> Users
--- in the dashboard, or `select id, email from auth.users;`), then run:
---   insert into public.admins (user_id) values ('paste-user-id-here');
+-- No update policy on purpose — messages can't be edited after sending.
+
+-- Enable realtime so new messages appear live without anyone refreshing.
+alter publication supabase_realtime add table public.messages;
+
+-- ---------- make yourself an admin ----------
+-- Find your user id: Authentication -> Users in the dashboard, or run
+-- `select id, email from auth.users;` — then run this, substituting it in:
+--
+--   insert into public.admins (user_id) values ('paste-your-user-id-here');

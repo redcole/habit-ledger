@@ -103,6 +103,7 @@ export default function ChatWidget({ session, configured }) {
       user_id: session.user.id,
       user_email: session.user.email,
       content: trimmed.slice(0, MAX_MESSAGE_LENGTH),
+      is_admin: isAdmin,
     })
     setSending(false)
 
@@ -173,6 +174,7 @@ export default function ChatWidget({ session, configured }) {
                 <div key={m.id} className="chat-message">
                   <div className="chat-message-meta">
                     <span className="chat-author">{displayNameFor(m.user_email)}</span>
+                    {m.is_admin && <span className="chat-admin-badge">ADMIN</span>}
                     <span className="chat-time">{formatTime(m.created_at)}</span>
                     {isAdmin && (
                       <button

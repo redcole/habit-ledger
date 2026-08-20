@@ -729,6 +729,18 @@ button {
   color: var(--sage);
 }
 
+.chat-admin-badge {
+  font-family: var(--body);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--on-accent);
+  background: var(--amber);
+  padding: 1px 5px;
+  border-radius: 3px;
+  line-height: 1.4;
+}
+
 .chat-time {
   font-size: 10px;
   color: var(--muted);
