@@ -59,3 +59,31 @@ create policy "Signed-in users can send messages"
 
 -- Enable realtime so new messages appear live without anyone refreshing.
 alter publication supabase_realtime add table public.messages;
+
+-- ---------- admin (chat moderation) ----------
+
+create table if not exists public.admins (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
+alter table public.admins enable row level security;
+
+-- A signed-in user can only ever see their own row here — enough for the
+-- app to check "am I an admin?" without exposing the list to anyone else.
+create policy "Users can check their own admin status"
+  on public.admins for select
+  using (auth.uid() = user_id);
+
+-- Admins can delete any chat message — individually, or all at once.
+create policy "Admins can delete messages"
+  on public.messages for delete
+  using (
+    exists (
+      select 1 from public.admins where admins.user_id = auth.uid()
+    )
+  );
+
+-- To make an account an admin, find its user id (Authentication -> Users
+-- in the dashboard, or `select id, email from auth.users;`), then run:
+--   insert into public.admins (user_id) values ('paste-user-id-here');

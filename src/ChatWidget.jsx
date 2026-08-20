@@ -21,8 +21,22 @@ export default function ChatWidget({ session, configured }) {
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const [isAdmin, setIsAdmin] = useState(false)
   const listRef = useRef(null)
   const lastSentAtRef = useRef(0)
+
+  useEffect(() => {
+    if (!configured || !session) {
+      setIsAdmin(false)
+      return
+    }
+    supabase
+      .from('admins')
+      .select('user_id')
+      .eq('user_id', session.user.id)
+      .maybeSingle()
+      .then(({ data }) => setIsAdmin(!!data))
+  }, [configured, session])
 
   useEffect(() => {
     if (!configured) return
@@ -36,6 +50,13 @@ export default function ChatWidget({ session, configured }) {
         { event: 'INSERT', schema: 'public', table: 'messages' },
         (payload) => {
           setMessages((prev) => [...prev, payload.new])
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'messages' },
+        (payload) => {
+          setMessages((prev) => prev.filter((m) => m.id !== payload.old.id))
         }
       )
       .subscribe()
@@ -93,6 +114,35 @@ export default function ChatWidget({ session, configured }) {
     }
   }
 
+  async function deleteMessage(id) {
+    const { error: deleteError } = await supabase.from('messages').delete().eq('id', id)
+    if (deleteError) {
+      console.error('Failed to delete message:', deleteError)
+      setError(`Couldn't delete that message: ${deleteError.message}`)
+      return
+    }
+    // Remove locally right away rather than waiting on the realtime event.
+    setMessages((prev) => prev.filter((m) => m.id !== id))
+  }
+
+  async function clearAllMessages() {
+    const confirmed = window.confirm(
+      `Delete all ${messages.length} message${messages.length === 1 ? '' : 's'}? This can't be undone.`
+    )
+    if (!confirmed) return
+
+    const { error: clearError } = await supabase
+      .from('messages')
+      .delete()
+      .gte('created_at', '1970-01-01T00:00:00Z') // matches every row; the API requires some filter
+    if (clearError) {
+      console.error('Failed to clear messages:', clearError)
+      setError(`Couldn't clear messages: ${clearError.message}`)
+      return
+    }
+    setMessages([])
+  }
+
   if (!configured) return null
 
   return (
@@ -101,9 +151,16 @@ export default function ChatWidget({ session, configured }) {
         <div className="chat-panel">
           <div className="chat-panel-header">
             <span>Global chat</span>
-            <button className="chat-close" onClick={() => setOpen(false)} aria-label="Close chat">
-              ✕
-            </button>
+            <div className="chat-header-actions">
+              {isAdmin && messages.length > 0 && (
+                <button className="chat-clear-all" onClick={clearAllMessages} title="Delete all messages">
+                  clear all
+                </button>
+              )}
+              <button className="chat-close" onClick={() => setOpen(false)} aria-label="Close chat">
+                ✕
+              </button>
+            </div>
           </div>
 
           <div className="chat-messages" ref={listRef}>
@@ -117,6 +174,16 @@ export default function ChatWidget({ session, configured }) {
                   <div className="chat-message-meta">
                     <span className="chat-author">{displayNameFor(m.user_email)}</span>
                     <span className="chat-time">{formatTime(m.created_at)}</span>
+                    {isAdmin && (
+                      <button
+                        className="chat-message-delete"
+                        onClick={() => deleteMessage(m.id)}
+                        aria-label="Delete message"
+                        title="Delete message"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                   <p className="chat-content">{m.content}</p>
                 </div>
@@ -143,7 +210,7 @@ export default function ChatWidget({ session, configured }) {
 
           {error && <p className="chat-error">{error}</p>}
 
-          <p className="chat-disclaimer">Public and visible to everyone. Messages can't be deleted.</p>
+          <p className="chat-disclaimer">Public and visible to everyone.</p>
         </div>
       )}
 
