@@ -61,6 +61,8 @@ export default function ChatWidget({ session, configured }) {
       .limit(MESSAGE_LIMIT)
     if (!fetchError && data) {
       setMessages(data.slice().reverse())
+    } else if (fetchError) {
+      console.error('Failed to load chat messages:', fetchError)
     }
     setLoading(false)
   }
@@ -84,7 +86,8 @@ export default function ChatWidget({ session, configured }) {
     setSending(false)
 
     if (sendError) {
-      setError('Message failed to send — try again.')
+      console.error('Failed to send chat message:', sendError)
+      setError(`Message failed to send: ${sendError.message}`)
     } else {
       setDraft('')
     }
