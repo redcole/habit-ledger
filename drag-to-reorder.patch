@@ -1,0 +1,253 @@
+diff --git a/src/App.jsx b/src/App.jsx
+index 0fdcb3d..5a9aae9 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -153,7 +153,18 @@ function Heatmap({ completions }) {
+ 
+ // ---------- habit row ----------
+ 
+-function HabitRow({ habit, onToggleToday, onDelete, onRename }) {
++function HabitRow({
++  habit,
++  onToggleToday,
++  onDelete,
++  onRename,
++  onDragStart,
++  onDragOver,
++  onDrop,
++  onDragEnd,
++  isDragging,
++  isDragOver,
++}) {
+   const today = todayStr()
+   const doneToday = !!habit.completions[today]
+   const streak = useMemo(() => currentStreak(habit.completions, today), [habit.completions, today])
+@@ -191,9 +202,30 @@ function HabitRow({ habit, onToggleToday, onDelete, onRename }) {
+   }
+ 
+   return (
+-    <div className="row">
++    <div
++      className={`row ${isDragging ? 'row-dragging' : ''} ${isDragOver ? 'row-drag-over' : ''}`}
++      onDragOver={(e) => {
++        e.preventDefault()
++        onDragOver(habit.id)
++      }}
++      onDrop={(e) => {
++        e.preventDefault()
++        onDrop(habit.id)
++      }}
++    >
+       <div className="row-top">
+-        <div className="row-heading">
++        <div className="row-heading-group">
++          <span
++            className="drag-handle"
++            draggable
++            onDragStart={() => onDragStart(habit.id)}
++            onDragEnd={onDragEnd}
++            aria-label="Drag to reorder"
++            title="Drag to reorder"
++          >
++            ⠿
++          </span>
++          <div className="row-heading">
+           {isEditing ? (
+             <input
+               className="row-name-input"
+@@ -214,6 +246,7 @@ function HabitRow({ habit, onToggleToday, onDelete, onRename }) {
+             <TallyMarks count={streak} />
+             <span className="best">best {best}</span>
+           </div>
++          </div>
+         </div>
+         <div className="row-actions">
+           {isEditing ? (
+@@ -318,6 +351,8 @@ export default function App() {
+   const [habitsLoading, setHabitsLoading] = useState(false)
+   const [importCandidates, setImportCandidates] = useState([])
+   const [importing, setImporting] = useState(false)
++  const [dragId, setDragId] = useState(null)
++  const [overId, setOverId] = useState(null)
+ 
+   // Guest mode: persist to localStorage. Skipped once signed in, since data
+   // lives in Supabase at that point instead.
+@@ -354,17 +389,26 @@ export default function App() {
+     const { data, error } = await supabase
+       .from('habits')
+       .select('*')
++      .order('position', { ascending: true, nullsFirst: false })
+       .order('created_at', { ascending: true })
+ 
+     if (!error && data) {
+-      setHabits(
+-        data.map((row) => ({
+-          id: row.id,
+-          name: row.name,
+-          createdAt: row.created_at,
+-          completions: row.completions || {},
+-        }))
+-      )
++      const loaded = data.map((row) => ({
++        id: row.id,
++        name: row.name,
++        createdAt: row.created_at,
++        completions: row.completions || {},
++      }))
++      setHabits(loaded)
++
++      // Rows created before drag-to-reorder existed have a null position —
++      // assign sequential positions matching their current (created_at)
++      // order the first time we see them, so reordering has something to
++      // work with everywhere it's opened.
++      const needsBackfill = data.some((row) => row.position === null || row.position === undefined)
++      if (needsBackfill) {
++        persistOrder(loaded)
++      }
+     }
+     setHabitsLoading(false)
+ 
+@@ -378,6 +422,12 @@ export default function App() {
+     }
+   }
+ 
++  async function persistOrder(orderedHabits) {
++    await Promise.all(
++      orderedHabits.map((h, idx) => supabase.from('habits').update({ position: idx }).eq('id', h.id))
++    )
++  }
++
+   async function importLocalHabits() {
+     if (!session || importCandidates.length === 0) return
+     setImporting(true)
+@@ -440,7 +490,7 @@ export default function App() {
+     if (session) {
+       const { data, error } = await supabase
+         .from('habits')
+-        .insert({ user_id: session.user.id, name, completions: {} })
++        .insert({ user_id: session.user.id, name, completions: {}, position: habits.length })
+         .select()
+         .single()
+       if (!error && data) {
+@@ -492,6 +542,43 @@ export default function App() {
+     }
+   }
+ 
++  // ---------- drag-to-reorder ----------
++
++  function handleDragStart(id) {
++    setDragId(id)
++  }
++
++  function handleDragOver(id) {
++    if (id !== overId) setOverId(id)
++  }
++
++  function handleDragEnd() {
++    setDragId(null)
++    setOverId(null)
++  }
++
++  function handleDrop(targetId) {
++    if (!dragId || dragId === targetId) {
++      setDragId(null)
++      setOverId(null)
++      return
++    }
++    const fromIdx = habits.findIndex((h) => h.id === dragId)
++    const toIdx = habits.findIndex((h) => h.id === targetId)
++    setDragId(null)
++    setOverId(null)
++    if (fromIdx === -1 || toIdx === -1) return
++
++    const reordered = [...habits]
++    const [moved] = reordered.splice(fromIdx, 1)
++    reordered.splice(toIdx, 0, moved)
++    setHabits(reordered)
++
++    if (session) {
++      persistOrder(reordered)
++    }
++  }
++
+   return (
+     <div className="app">
+       <div className="header">
+@@ -544,6 +631,12 @@ export default function App() {
+               onToggleToday={toggleToday}
+               onDelete={deleteHabit}
+               onRename={renameHabit}
++              onDragStart={handleDragStart}
++              onDragOver={handleDragOver}
++              onDrop={handleDrop}
++              onDragEnd={handleDragEnd}
++              isDragging={dragId === h.id}
++              isDragOver={overId === h.id && dragId !== h.id}
+             />
+           ))}
+         </div>
+diff --git a/src/index.css b/src/index.css
+index 772ada6..30fff63 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -392,6 +392,34 @@ button {
+   margin-bottom: 12px;
+   position: relative;
+   box-shadow: 0 1px 2px rgba(35, 43, 37, 0.04);
++  transition: opacity 0.15s ease, border-color 0.15s ease;
++}
++
++.row-dragging {
++  opacity: 0.45;
++}
++
++.row-drag-over {
++  border-color: var(--amber);
++}
++
++.drag-handle {
++  cursor: grab;
++  color: var(--muted);
++  font-size: 15px;
++  line-height: 1;
++  padding: 4px 2px 4px 0;
++  flex-shrink: 0;
++  user-select: none;
++  margin-top: 2px;
++}
++
++.drag-handle:hover {
++  color: var(--ink-dim);
++}
++
++.drag-handle:active {
++  cursor: grabbing;
+ }
+ 
+ .row-top {
+diff --git a/supabase-migration-002-add-position.sql b/supabase-migration-002-add-position.sql
+new file mode 100644
+index 0000000..e47f7e0
+--- /dev/null
++++ b/supabase-migration-002-add-position.sql
+@@ -0,0 +1,8 @@
++-- Run this once in your Supabase SQL Editor if your `habits` table was
++-- created before drag-to-reorder was added. New installs already get this
++-- column from supabase-schema.sql, so this file is only for existing ones.
++--
++-- No backfill needed here — the app assigns sequential positions to any
++-- rows with a null position the next time it loads your habits.
++
++alter table public.habits add column if not exists position integer;
+diff --git a/supabase-schema.sql b/supabase-schema.sql
+index afb0d5b..4df7b90 100644
+--- a/supabase-schema.sql
++++ b/supabase-schema.sql
+@@ -7,6 +7,7 @@ create table if not exists public.habits (
+   user_id uuid not null references auth.users(id) on delete cascade,
+   name text not null,
+   completions jsonb not null default '{}'::jsonb,
++  position integer,
+   created_at timestamptz not null default now()
+ );
+ 

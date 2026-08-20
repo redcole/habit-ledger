@@ -7,6 +7,7 @@ create table if not exists public.habits (
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
   completions jsonb not null default '{}'::jsonb,
+  position integer,
   created_at timestamptz not null default now()
 );
 

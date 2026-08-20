@@ -153,7 +153,18 @@ function Heatmap({ completions }) {
 
 // ---------- habit row ----------
 
-function HabitRow({ habit, onToggleToday, onDelete, onRename }) {
+function HabitRow({
+  habit,
+  onToggleToday,
+  onDelete,
+  onRename,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  isDragging,
+  isDragOver,
+}) {
   const today = todayStr()
   const doneToday = !!habit.completions[today]
   const streak = useMemo(() => currentStreak(habit.completions, today), [habit.completions, today])
@@ -191,9 +202,30 @@ function HabitRow({ habit, onToggleToday, onDelete, onRename }) {
   }
 
   return (
-    <div className="row">
+    <div
+      className={`row ${isDragging ? 'row-dragging' : ''} ${isDragOver ? 'row-drag-over' : ''}`}
+      onDragOver={(e) => {
+        e.preventDefault()
+        onDragOver(habit.id)
+      }}
+      onDrop={(e) => {
+        e.preventDefault()
+        onDrop(habit.id)
+      }}
+    >
       <div className="row-top">
-        <div className="row-heading">
+        <div className="row-heading-group">
+          <span
+            className="drag-handle"
+            draggable
+            onDragStart={() => onDragStart(habit.id)}
+            onDragEnd={onDragEnd}
+            aria-label="Drag to reorder"
+            title="Drag to reorder"
+          >
+            ⠿
+          </span>
+          <div className="row-heading">
           {isEditing ? (
             <input
               className="row-name-input"
@@ -213,6 +245,7 @@ function HabitRow({ habit, onToggleToday, onDelete, onRename }) {
           <div className="row-meta">
             <TallyMarks count={streak} />
             <span className="best">best {best}</span>
+          </div>
           </div>
         </div>
         <div className="row-actions">
@@ -318,6 +351,8 @@ export default function App() {
   const [habitsLoading, setHabitsLoading] = useState(false)
   const [importCandidates, setImportCandidates] = useState([])
   const [importing, setImporting] = useState(false)
+  const [dragId, setDragId] = useState(null)
+  const [overId, setOverId] = useState(null)
 
   // Guest mode: persist to localStorage. Skipped once signed in, since data
   // lives in Supabase at that point instead.
@@ -354,17 +389,26 @@ export default function App() {
     const { data, error } = await supabase
       .from('habits')
       .select('*')
+      .order('position', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true })
 
     if (!error && data) {
-      setHabits(
-        data.map((row) => ({
-          id: row.id,
-          name: row.name,
-          createdAt: row.created_at,
-          completions: row.completions || {},
-        }))
-      )
+      const loaded = data.map((row) => ({
+        id: row.id,
+        name: row.name,
+        createdAt: row.created_at,
+        completions: row.completions || {},
+      }))
+      setHabits(loaded)
+
+      // Rows created before drag-to-reorder existed have a null position —
+      // assign sequential positions matching their current (created_at)
+      // order the first time we see them, so reordering has something to
+      // work with everywhere it's opened.
+      const needsBackfill = data.some((row) => row.position === null || row.position === undefined)
+      if (needsBackfill) {
+        persistOrder(loaded)
+      }
     }
     setHabitsLoading(false)
 
@@ -376,6 +420,12 @@ export default function App() {
     } catch {
       // ignore
     }
+  }
+
+  async function persistOrder(orderedHabits) {
+    await Promise.all(
+      orderedHabits.map((h, idx) => supabase.from('habits').update({ position: idx }).eq('id', h.id))
+    )
   }
 
   async function importLocalHabits() {
@@ -440,7 +490,7 @@ export default function App() {
     if (session) {
       const { data, error } = await supabase
         .from('habits')
-        .insert({ user_id: session.user.id, name, completions: {} })
+        .insert({ user_id: session.user.id, name, completions: {}, position: habits.length })
         .select()
         .single()
       if (!error && data) {
@@ -489,6 +539,43 @@ export default function App() {
     setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, name: newName } : h)))
     if (session) {
       await supabase.from('habits').update({ name: newName }).eq('id', id)
+    }
+  }
+
+  // ---------- drag-to-reorder ----------
+
+  function handleDragStart(id) {
+    setDragId(id)
+  }
+
+  function handleDragOver(id) {
+    if (id !== overId) setOverId(id)
+  }
+
+  function handleDragEnd() {
+    setDragId(null)
+    setOverId(null)
+  }
+
+  function handleDrop(targetId) {
+    if (!dragId || dragId === targetId) {
+      setDragId(null)
+      setOverId(null)
+      return
+    }
+    const fromIdx = habits.findIndex((h) => h.id === dragId)
+    const toIdx = habits.findIndex((h) => h.id === targetId)
+    setDragId(null)
+    setOverId(null)
+    if (fromIdx === -1 || toIdx === -1) return
+
+    const reordered = [...habits]
+    const [moved] = reordered.splice(fromIdx, 1)
+    reordered.splice(toIdx, 0, moved)
+    setHabits(reordered)
+
+    if (session) {
+      persistOrder(reordered)
     }
   }
 
@@ -544,6 +631,12 @@ export default function App() {
               onToggleToday={toggleToday}
               onDelete={deleteHabit}
               onRename={renameHabit}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onDragEnd={handleDragEnd}
+              isDragging={dragId === h.id}
+              isDragOver={overId === h.id && dragId !== h.id}
             />
           ))}
         </div>
