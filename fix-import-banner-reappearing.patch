@@ -1,0 +1,19 @@
+diff --git a/src/App.jsx b/src/App.jsx
+index 5a9aae9..ee6eed6 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -454,6 +454,14 @@ export default function App() {
+   }
+ 
+   function dismissImport() {
++    // The offer was declined — clear the leftover guest-mode data so this
++    // banner doesn't reappear next time the account habits load. The
++    // account's own habits (already loaded into `habits`) are untouched.
++    try {
++      localStorage.removeItem(STORAGE_KEY)
++    } catch {
++      // ignore
++    }
+     setImportCandidates([])
+   }
+ 
