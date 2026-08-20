@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import { supabase } from './supabaseClient'
+import AuthPanel from './Auth.jsx'
+import ImportBanner from './ImportBanner.jsx'
 
 const STORAGE_KEY = 'habit-ledger-v1'
 const THEME_KEY = 'habit-ledger-theme'
@@ -283,6 +286,27 @@ function AddHabitForm({ onAdd }) {
 // ---------- app ----------
 
 export default function App() {
+  const configured = !!supabase
+
+  // ---------- auth state ----------
+
+  const [session, setSession] = useState(null)
+  const [authLoading, setAuthLoading] = useState(configured)
+
+  useEffect(() => {
+    if (!configured) return
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session)
+      setAuthLoading(false)
+    })
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession)
+    })
+    return () => listener.subscription.unsubscribe()
+  }, [configured])
+
+  // ---------- habit state (local guest storage OR remote account storage) ----------
+
   const [habits, setHabits] = useState(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
@@ -291,6 +315,99 @@ export default function App() {
       return []
     }
   })
+  const [habitsLoading, setHabitsLoading] = useState(false)
+  const [importCandidates, setImportCandidates] = useState([])
+  const [importing, setImporting] = useState(false)
+
+  // Guest mode: persist to localStorage. Skipped once signed in, since data
+  // lives in Supabase at that point instead.
+  useEffect(() => {
+    if (session) return
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(habits))
+    } catch {
+      // storage unavailable — fail silently, app still works in-session
+    }
+  }, [habits, session])
+
+  // Load the right data source whenever auth state changes.
+  useEffect(() => {
+    if (!configured) return
+
+    if (session) {
+      loadRemoteHabits()
+    } else if (!authLoading) {
+      // signed out (including right after sign-out) — fall back to whatever
+      // is in this browser's local storage
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY)
+        setHabits(raw ? JSON.parse(raw) : [])
+      } catch {
+        setHabits([])
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session])
+
+  async function loadRemoteHabits() {
+    setHabitsLoading(true)
+    const { data, error } = await supabase
+      .from('habits')
+      .select('*')
+      .order('created_at', { ascending: true })
+
+    if (!error && data) {
+      setHabits(
+        data.map((row) => ({
+          id: row.id,
+          name: row.name,
+          createdAt: row.created_at,
+          completions: row.completions || {},
+        }))
+      )
+    }
+    setHabitsLoading(false)
+
+    // Offer to migrate any pre-sign-in local habits into the account.
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      const local = raw ? JSON.parse(raw) : []
+      if (local.length > 0) setImportCandidates(local)
+    } catch {
+      // ignore
+    }
+  }
+
+  async function importLocalHabits() {
+    if (!session || importCandidates.length === 0) return
+    setImporting(true)
+    const rows = importCandidates.map((h) => ({
+      user_id: session.user.id,
+      name: h.name,
+      completions: h.completions || {},
+    }))
+    const { data, error } = await supabase.from('habits').insert(rows).select()
+    setImporting(false)
+    if (!error && data) {
+      setHabits((prev) => [
+        ...prev,
+        ...data.map((row) => ({
+          id: row.id,
+          name: row.name,
+          createdAt: row.created_at,
+          completions: row.completions || {},
+        })),
+      ])
+      localStorage.removeItem(STORAGE_KEY)
+      setImportCandidates([])
+    }
+  }
+
+  function dismissImport() {
+    setImportCandidates([])
+  }
+
+  // ---------- theme ----------
 
   const [theme, setTheme] = useState(() => {
     try {
@@ -317,15 +434,23 @@ export default function App() {
     setTheme((t) => (t === 'light' ? 'dark' : 'light'))
   }
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(habits))
-    } catch {
-      // storage unavailable — fail silently, app still works in-session
-    }
-  }, [habits])
+  // ---------- habit CRUD (branches on signed-in vs guest) ----------
 
-  function addHabit(name) {
+  async function addHabit(name) {
+    if (session) {
+      const { data, error } = await supabase
+        .from('habits')
+        .insert({ user_id: session.user.id, name, completions: {} })
+        .select()
+        .single()
+      if (!error && data) {
+        setHabits((prev) => [
+          ...prev,
+          { id: data.id, name: data.name, createdAt: data.created_at, completions: data.completions || {} },
+        ])
+      }
+      return
+    }
     setHabits((prev) => [
       ...prev,
       {
@@ -337,28 +462,34 @@ export default function App() {
     ])
   }
 
-  function toggleToday(id) {
+  async function toggleToday(id) {
     const today = todayStr()
-    setHabits((prev) =>
-      prev.map((h) => {
-        if (h.id !== id) return h
-        const completions = { ...h.completions }
-        if (completions[today]) {
-          delete completions[today]
-        } else {
-          completions[today] = true
-        }
-        return { ...h, completions }
-      })
-    )
+    const habit = habits.find((h) => h.id === id)
+    if (!habit) return
+    const completions = { ...habit.completions }
+    if (completions[today]) {
+      delete completions[today]
+    } else {
+      completions[today] = true
+    }
+    setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, completions } : h)))
+    if (session) {
+      await supabase.from('habits').update({ completions }).eq('id', id)
+    }
   }
 
-  function deleteHabit(id) {
+  async function deleteHabit(id) {
     setHabits((prev) => prev.filter((h) => h.id !== id))
+    if (session) {
+      await supabase.from('habits').delete().eq('id', id)
+    }
   }
 
-  function renameHabit(id, newName) {
+  async function renameHabit(id, newName) {
     setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, name: newName } : h)))
+    if (session) {
+      await supabase.from('habits').update({ name: newName }).eq('id', id)
+    }
   }
 
   return (
@@ -381,10 +512,25 @@ export default function App() {
       </div>
       <p className="subhead">a running tally of what you show up for</p>
 
+      {!authLoading && <AuthPanel session={session} configured={configured} />}
+
+      {importCandidates.length > 0 && (
+        <ImportBanner
+          count={importCandidates.length}
+          onImport={importLocalHabits}
+          onDismiss={dismissImport}
+          importing={importing}
+        />
+      )}
+
       <AddHabitForm onAdd={addHabit} />
       <hr className="rule" />
 
-      {habits.length === 0 ? (
+      {habitsLoading ? (
+        <div className="empty">
+          <strong>Loading your habits...</strong>
+        </div>
+      ) : habits.length === 0 ? (
         <div className="empty">
           <strong>The ledger is empty.</strong>
           Add your first habit above — every day you mark it, the tally grows.
@@ -404,7 +550,9 @@ export default function App() {
       )}
 
       <div className="footer">
-        entries saved to this browser only · {habits.length} habit{habits.length === 1 ? '' : 's'} tracked
+        {session
+          ? `synced to your account · ${habits.length} habit${habits.length === 1 ? '' : 's'} tracked`
+          : `entries saved to this browser only · ${habits.length} habit${habits.length === 1 ? '' : 's'} tracked`}
       </div>
     </div>
   )
