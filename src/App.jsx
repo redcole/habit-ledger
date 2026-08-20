@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabaseClient'
 import AuthPanel from './Auth.jsx'
 import ImportBanner from './ImportBanner.jsx'
+import ChatWidget from './ChatWidget.jsx'
 
 const STORAGE_KEY = 'habit-ledger-v1'
 const THEME_KEY = 'habit-ledger-theme'
@@ -655,6 +656,8 @@ export default function App() {
           ? `synced to your account · ${habits.length} habit${habits.length === 1 ? '' : 's'} tracked`
           : `entries saved to this browser only · ${habits.length} habit${habits.length === 1 ? '' : 's'} tracked`}
       </div>
+
+      <ChatWidget session={session} configured={configured} />
     </div>
   )
 }

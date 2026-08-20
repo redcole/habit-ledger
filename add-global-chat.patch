@@ -1,0 +1,460 @@
+diff --git a/src/App.jsx b/src/App.jsx
+index ee6eed6..8c4579f 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
+ import { supabase } from './supabaseClient'
+ import AuthPanel from './Auth.jsx'
+ import ImportBanner from './ImportBanner.jsx'
++import ChatWidget from './ChatWidget.jsx'
+ 
+ const STORAGE_KEY = 'habit-ledger-v1'
+ const THEME_KEY = 'habit-ledger-theme'
+@@ -655,6 +656,8 @@ export default function App() {
+           ? `synced to your account · ${habits.length} habit${habits.length === 1 ? '' : 's'} tracked`
+           : `entries saved to this browser only · ${habits.length} habit${habits.length === 1 ? '' : 's'} tracked`}
+       </div>
++
++      <ChatWidget session={session} configured={configured} />
+     </div>
+   )
+ }
+diff --git a/src/ChatWidget.jsx b/src/ChatWidget.jsx
+new file mode 100644
+index 0000000..f4fd08a
+--- /dev/null
++++ b/src/ChatWidget.jsx
+@@ -0,0 +1,157 @@
++import { useEffect, useRef, useState } from 'react'
++import { supabase } from './supabaseClient'
++
++const MAX_MESSAGE_LENGTH = 500
++const MESSAGE_LIMIT = 100
++const MIN_SEND_INTERVAL_MS = 800 // light client-side throttle, not real spam protection
++
++function displayNameFor(email) {
++  if (!email) return 'someone'
++  return email.split('@')[0]
++}
++
++function formatTime(iso) {
++  return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
++}
++
++export default function ChatWidget({ session, configured }) {
++  const [open, setOpen] = useState(false)
++  const [messages, setMessages] = useState([])
++  const [loading, setLoading] = useState(false)
++  const [draft, setDraft] = useState('')
++  const [sending, setSending] = useState(false)
++  const [error, setError] = useState('')
++  const listRef = useRef(null)
++  const lastSentAtRef = useRef(0)
++
++  useEffect(() => {
++    if (!configured) return
++
++    loadMessages()
++
++    const channel = supabase
++      .channel('public:messages')
++      .on(
++        'postgres_changes',
++        { event: 'INSERT', schema: 'public', table: 'messages' },
++        (payload) => {
++          setMessages((prev) => [...prev, payload.new])
++        }
++      )
++      .subscribe()
++
++    return () => {
++      supabase.removeChannel(channel)
++    }
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [configured])
++
++  useEffect(() => {
++    if (open && listRef.current) {
++      listRef.current.scrollTop = listRef.current.scrollHeight
++    }
++  }, [messages, open])
++
++  async function loadMessages() {
++    setLoading(true)
++    const { data, error: fetchError } = await supabase
++      .from('messages')
++      .select('*')
++      .order('created_at', { ascending: false })
++      .limit(MESSAGE_LIMIT)
++    if (!fetchError && data) {
++      setMessages(data.slice().reverse())
++    }
++    setLoading(false)
++  }
++
++  async function handleSend(e) {
++    e.preventDefault()
++    setError('')
++    const trimmed = draft.trim()
++    if (!trimmed || !session) return
++
++    const now = Date.now()
++    if (now - lastSentAtRef.current < MIN_SEND_INTERVAL_MS) return
++    lastSentAtRef.current = now
++
++    setSending(true)
++    const { error: sendError } = await supabase.from('messages').insert({
++      user_id: session.user.id,
++      user_email: session.user.email,
++      content: trimmed.slice(0, MAX_MESSAGE_LENGTH),
++    })
++    setSending(false)
++
++    if (sendError) {
++      setError('Message failed to send — try again.')
++    } else {
++      setDraft('')
++    }
++  }
++
++  if (!configured) return null
++
++  return (
++    <div className="chat-widget">
++      {open && (
++        <div className="chat-panel">
++          <div className="chat-panel-header">
++            <span>Global chat</span>
++            <button className="chat-close" onClick={() => setOpen(false)} aria-label="Close chat">
++              ✕
++            </button>
++          </div>
++
++          <div className="chat-messages" ref={listRef}>
++            {loading ? (
++              <p className="chat-empty">Loading messages...</p>
++            ) : messages.length === 0 ? (
++              <p className="chat-empty">No messages yet — say hello.</p>
++            ) : (
++              messages.map((m) => (
++                <div key={m.id} className="chat-message">
++                  <div className="chat-message-meta">
++                    <span className="chat-author">{displayNameFor(m.user_email)}</span>
++                    <span className="chat-time">{formatTime(m.created_at)}</span>
++                  </div>
++                  <p className="chat-content">{m.content}</p>
++                </div>
++              ))
++            )}
++          </div>
++
++          {session ? (
++            <form className="chat-input-row" onSubmit={handleSend}>
++              <input
++                type="text"
++                placeholder="Say something..."
++                value={draft}
++                onChange={(e) => setDraft(e.target.value)}
++                maxLength={MAX_MESSAGE_LENGTH}
++              />
++              <button type="submit" disabled={sending || !draft.trim()}>
++                send
++              </button>
++            </form>
++          ) : (
++            <p className="chat-signed-out">Sign in above to join the conversation.</p>
++          )}
++
++          {error && <p className="chat-error">{error}</p>}
++
++          <p className="chat-disclaimer">Public and visible to everyone. Messages can't be deleted.</p>
++        </div>
++      )}
++
++      <button
++        className="chat-toggle"
++        onClick={() => setOpen((o) => !o)}
++        aria-label={open ? 'Close chat' : 'Open global chat'}
++        title={open ? 'Close chat' : 'Open global chat'}
++      >
++        {open ? '✕' : '💬'}
++      </button>
++    </div>
++  )
++}
+diff --git a/src/index.css b/src/index.css
+index 30fff63..22ac1b1 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -590,6 +590,198 @@ button {
+   background: transparent;
+ }
+ 
++/* ---------- Chat widget ---------- */
++
++.chat-widget {
++  position: fixed;
++  bottom: 20px;
++  right: 20px;
++  z-index: 50;
++  display: flex;
++  flex-direction: column;
++  align-items: flex-end;
++  gap: 12px;
++}
++
++.chat-toggle {
++  width: 52px;
++  height: 52px;
++  border-radius: 50%;
++  border: 1px solid var(--border);
++  background: var(--amber);
++  color: var(--on-accent);
++  font-size: 20px;
++  cursor: pointer;
++  box-shadow: 0 2px 10px rgba(35, 43, 37, 0.18);
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  transition: filter 0.15s ease;
++}
++
++.chat-toggle:hover {
++  filter: brightness(1.08);
++}
++
++.chat-panel {
++  width: min(340px, calc(100vw - 40px));
++  height: min(460px, calc(100vh - 140px));
++  background: var(--panel);
++  border: 1px solid var(--border);
++  border-radius: 8px;
++  box-shadow: 0 8px 30px rgba(35, 43, 37, 0.2);
++  display: flex;
++  flex-direction: column;
++  overflow: hidden;
++}
++
++.chat-panel-header {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  padding: 12px 14px;
++  border-bottom: 1px solid var(--border);
++  font-family: var(--display);
++  font-weight: 600;
++  font-size: 14px;
++  color: var(--ink);
++  background: var(--panel-raised);
++  flex-shrink: 0;
++}
++
++.chat-close {
++  border: none;
++  background: transparent;
++  color: var(--muted);
++  cursor: pointer;
++  font-size: 14px;
++  padding: 4px;
++}
++
++.chat-close:hover {
++  color: var(--rust);
++}
++
++.chat-messages {
++  flex: 1;
++  overflow-y: auto;
++  padding: 12px 14px;
++  display: flex;
++  flex-direction: column;
++  gap: 12px;
++}
++
++.chat-empty {
++  color: var(--muted);
++  font-size: 12px;
++  text-align: center;
++  margin: auto 0;
++}
++
++.chat-message-meta {
++  display: flex;
++  align-items: baseline;
++  gap: 8px;
++  margin-bottom: 2px;
++}
++
++.chat-author {
++  font-family: var(--display);
++  font-weight: 600;
++  font-size: 12px;
++  color: var(--sage);
++}
++
++.chat-time {
++  font-size: 10px;
++  color: var(--muted);
++}
++
++.chat-content {
++  margin: 0;
++  font-size: 13px;
++  color: var(--ink);
++  line-height: 1.4;
++  word-break: break-word;
++  white-space: pre-wrap;
++}
++
++.chat-input-row {
++  display: flex;
++  gap: 8px;
++  padding: 10px;
++  border-top: 1px solid var(--border);
++  flex-shrink: 0;
++}
++
++.chat-input-row input {
++  flex: 1;
++  background: var(--panel-raised);
++  border: 1px solid var(--border);
++  color: var(--ink);
++  font-family: var(--body);
++  font-size: 13px;
++  padding: 8px 10px;
++  border-radius: 3px;
++  outline: none;
++}
++
++.chat-input-row input:focus {
++  border-color: var(--amber);
++}
++
++.chat-input-row button {
++  background: var(--amber);
++  color: var(--on-accent);
++  border: 1px solid var(--amber);
++  font-weight: 600;
++  font-size: 12px;
++  padding: 0 14px;
++  border-radius: 3px;
++  cursor: pointer;
++}
++
++.chat-input-row button:disabled {
++  opacity: 0.5;
++  cursor: not-allowed;
++}
++
++.chat-signed-out {
++  padding: 10px 14px;
++  margin: 0;
++  font-size: 12px;
++  color: var(--muted);
++  border-top: 1px solid var(--border);
++  flex-shrink: 0;
++}
++
++.chat-error {
++  margin: 0;
++  padding: 6px 14px 0;
++  font-size: 11px;
++  color: var(--rust);
++  flex-shrink: 0;
++}
++
++.chat-disclaimer {
++  margin: 0;
++  padding: 6px 14px 10px;
++  font-size: 10px;
++  color: var(--muted);
++  text-align: center;
++  flex-shrink: 0;
++}
++
++@media (max-width: 480px) {
++  .chat-widget {
++    bottom: 16px;
++    right: 16px;
++  }
++  .chat-panel {
++    width: calc(100vw - 32px);
++  }
++}
++
+ /* ---------- Footer ---------- */
+ 
+ .footer {
+diff --git a/supabase-migration-003-add-messages.sql b/supabase-migration-003-add-messages.sql
+new file mode 100644
+index 0000000..755a2c3
+--- /dev/null
++++ b/supabase-migration-003-add-messages.sql
+@@ -0,0 +1,30 @@
++-- Run this once in your Supabase SQL Editor to add the global chat feature.
++-- (Already included in supabase-schema.sql for brand-new installs — this
++-- file is for projects that ran that schema before chat existed.)
++
++create table if not exists public.messages (
++  id uuid primary key default gen_random_uuid(),
++  user_id uuid not null references auth.users(id) on delete cascade,
++  user_email text not null,
++  content text not null check (char_length(content) <= 500),
++  created_at timestamptz not null default now()
++);
++
++create index if not exists messages_created_at_idx on public.messages(created_at);
++
++alter table public.messages enable row level security;
++
++-- The chat is visible to every visitor, signed in or not.
++create policy "Anyone can view messages"
++  on public.messages for select
++  using (true);
++
++-- Only signed-in users can post, and only ever as themselves.
++create policy "Signed-in users can send messages"
++  on public.messages for insert
++  with check (auth.uid() = user_id);
++
++-- No update/delete policies on purpose — messages are permanent once sent.
++
++-- Enable realtime so new messages appear live without anyone refreshing.
++alter publication supabase_realtime add table public.messages;
+diff --git a/supabase-schema.sql b/supabase-schema.sql
+index 4df7b90..e3c58ac 100644
+--- a/supabase-schema.sql
++++ b/supabase-schema.sql
+@@ -30,3 +30,32 @@ create policy "Users can update their own habits"
+ create policy "Users can delete their own habits"
+   on public.habits for delete
+   using (auth.uid() = user_id);
++
++-- ---------- global chat ----------
++
++create table if not exists public.messages (
++  id uuid primary key default gen_random_uuid(),
++  user_id uuid not null references auth.users(id) on delete cascade,
++  user_email text not null,
++  content text not null check (char_length(content) <= 500),
++  created_at timestamptz not null default now()
++);
++
++create index if not exists messages_created_at_idx on public.messages(created_at);
++
++alter table public.messages enable row level security;
++
++-- The chat is visible to every visitor, signed in or not.
++create policy "Anyone can view messages"
++  on public.messages for select
++  using (true);
++
++-- Only signed-in users can post, and only ever as themselves.
++create policy "Signed-in users can send messages"
++  on public.messages for insert
++  with check (auth.uid() = user_id);
++
++-- No update/delete policies on purpose — messages are permanent once sent.
++
++-- Enable realtime so new messages appear live without anyone refreshing.
++alter publication supabase_realtime add table public.messages;
