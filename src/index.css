@@ -546,6 +546,31 @@ button {
   border-color: var(--amber);
 }
 
+.row-expanded {
+  padding: 26px 28px 30px;
+  border-color: var(--amber);
+}
+
+.row-expanded .heatmap {
+  gap: 6px;
+}
+
+.row-expanded .cell {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+}
+
+.row-expanded .row-name {
+  font-size: 20px;
+}
+
+.row-expanded .mark-btn,
+.row-expanded .skip-btn {
+  padding: 10px 18px;
+  font-size: 13px;
+}
+
 .drag-handle {
   cursor: grab;
   color: var(--muted);
@@ -686,6 +711,23 @@ button {
 }
 
 .edit-btn:hover {
+  color: var(--amber);
+}
+
+.expand-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 15px;
+  padding: 6px;
+  line-height: 1;
+  border-radius: 3px;
+  transition: color 0.15s ease;
+}
+
+.expand-btn:hover,
+.expand-btn.expanded {
   color: var(--amber);
 }
 

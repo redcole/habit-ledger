@@ -196,6 +196,7 @@ function HabitRow({
 
   const [isEditing, setIsEditing] = useState(false)
   const [draftName, setDraftName] = useState(habit.name)
+  const [expanded, setExpanded] = useState(false)
 
   function startEditing() {
     setDraftName(habit.name)
@@ -227,7 +228,7 @@ function HabitRow({
 
   return (
     <div
-      className={`row ${isDragging ? 'row-dragging' : ''} ${isDragOver ? 'row-drag-over' : ''}`}
+      className={`row ${isDragging ? 'row-dragging' : ''} ${isDragOver ? 'row-drag-over' : ''} ${expanded ? 'row-expanded' : ''}`}
       onDragOver={(e) => {
         e.preventDefault()
         onDragOver(habit.id)
@@ -301,6 +302,14 @@ function HabitRow({
                 onClick={() => onToggleSkipToday(habit.id)}
               >
                 {skippedToday ? '↺ unskip' : 'skip'}
+              </button>
+              <button
+                className={`expand-btn ${expanded ? 'expanded' : ''}`}
+                onClick={() => setExpanded((e) => !e)}
+                aria-label={expanded ? 'Collapse habit' : 'Enlarge habit'}
+                title={expanded ? 'Collapse' : 'Enlarge for easier tapping'}
+              >
+                {expanded ? '⤡' : '⤢'}
               </button>
               <button className="edit-btn" onClick={startEditing} aria-label="Rename habit" title="Rename">
                 ✎

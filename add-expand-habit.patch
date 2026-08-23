@@ -1,0 +1,110 @@
+From 9fe565e5cbb675917cea5ebee7346a1bcb1fee30 Mon Sep 17 00:00:00 2001
+From: dev <dev@local>
+Date: Sun, 23 Aug 2026 21:09:32 +0000
+Subject: [PATCH] Add per-habit enlarge toggle for easier mobile interaction
+ with heatmap cells
+
+---
+ src/App.jsx   | 11 ++++++++++-
+ src/index.css | 42 ++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 52 insertions(+), 1 deletion(-)
+
+diff --git a/src/App.jsx b/src/App.jsx
+index e0f01dc..cfee748 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -196,6 +196,7 @@ function HabitRow({
+ 
+   const [isEditing, setIsEditing] = useState(false)
+   const [draftName, setDraftName] = useState(habit.name)
++  const [expanded, setExpanded] = useState(false)
+ 
+   function startEditing() {
+     setDraftName(habit.name)
+@@ -227,7 +228,7 @@ function HabitRow({
+ 
+   return (
+     <div
+-      className={`row ${isDragging ? 'row-dragging' : ''} ${isDragOver ? 'row-drag-over' : ''}`}
++      className={`row ${isDragging ? 'row-dragging' : ''} ${isDragOver ? 'row-drag-over' : ''} ${expanded ? 'row-expanded' : ''}`}
+       onDragOver={(e) => {
+         e.preventDefault()
+         onDragOver(habit.id)
+@@ -302,6 +303,14 @@ function HabitRow({
+               >
+                 {skippedToday ? '↺ unskip' : 'skip'}
+               </button>
++              <button
++                className={`expand-btn ${expanded ? 'expanded' : ''}`}
++                onClick={() => setExpanded((e) => !e)}
++                aria-label={expanded ? 'Collapse habit' : 'Enlarge habit'}
++                title={expanded ? 'Collapse' : 'Enlarge for easier tapping'}
++              >
++                {expanded ? '⤡' : '⤢'}
++              </button>
+               <button className="edit-btn" onClick={startEditing} aria-label="Rename habit" title="Rename">
+                 ✎
+               </button>
+diff --git a/src/index.css b/src/index.css
+index 5e78aba..4c8f229 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -546,6 +546,31 @@ button {
+   border-color: var(--amber);
+ }
+ 
++.row-expanded {
++  padding: 26px 28px 30px;
++  border-color: var(--amber);
++}
++
++.row-expanded .heatmap {
++  gap: 6px;
++}
++
++.row-expanded .cell {
++  width: 24px;
++  height: 24px;
++  border-radius: 5px;
++}
++
++.row-expanded .row-name {
++  font-size: 20px;
++}
++
++.row-expanded .mark-btn,
++.row-expanded .skip-btn {
++  padding: 10px 18px;
++  font-size: 13px;
++}
++
+ .drag-handle {
+   cursor: grab;
+   color: var(--muted);
+@@ -689,6 +714,23 @@ button {
+   color: var(--amber);
+ }
+ 
++.expand-btn {
++  border: none;
++  background: transparent;
++  color: var(--muted);
++  cursor: pointer;
++  font-size: 15px;
++  padding: 6px;
++  line-height: 1;
++  border-radius: 3px;
++  transition: color 0.15s ease;
++}
++
++.expand-btn:hover,
++.expand-btn.expanded {
++  color: var(--amber);
++}
++
+ /* ---------- Tally marks (signature element) ---------- */
+ 
+ .tally {
+-- 
+2.43.0
+
