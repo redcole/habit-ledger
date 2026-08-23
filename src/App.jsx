@@ -707,7 +707,11 @@ export default function App() {
           : `entries saved to this browser only · ${habits.length} habit${habits.length === 1 ? '' : 's'} tracked`}
       </div>
 
-      <ChatWidget session={session} configured={configured} />
+      <ChatWidget
+        session={session}
+        configured={configured}
+        displayName={profile?.full_name || session?.user.email}
+      />
     </div>
   )
 }

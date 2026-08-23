@@ -97,6 +97,7 @@ create table if not exists public.messages (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   user_email text not null,
+  user_display_name text,
   content text not null check (char_length(content) <= 500),
   is_admin boolean not null default false,
   created_at timestamptz not null default now()

@@ -14,7 +14,7 @@ function formatTime(iso) {
   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }
 
-export default function ChatWidget({ session, configured }) {
+export default function ChatWidget({ session, configured, displayName }) {
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(false)
@@ -102,6 +102,7 @@ export default function ChatWidget({ session, configured }) {
     const { error: sendError } = await supabase.from('messages').insert({
       user_id: session.user.id,
       user_email: session.user.email,
+      user_display_name: displayName || null,
       content: trimmed.slice(0, MAX_MESSAGE_LENGTH),
       is_admin: isAdmin,
     })
@@ -173,7 +174,7 @@ export default function ChatWidget({ session, configured }) {
               messages.map((m) => (
                 <div key={m.id} className="chat-message">
                   <div className="chat-message-meta">
-                    <span className="chat-author">{displayNameFor(m.user_email)}</span>
+                    <span className="chat-author">{m.user_display_name || displayNameFor(m.user_email)}</span>
                     {m.is_admin && <span className="chat-admin-badge">ADMIN</span>}
                     <span className="chat-time">{formatTime(m.created_at)}</span>
                     {isAdmin && (
