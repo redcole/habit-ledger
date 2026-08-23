@@ -39,6 +39,12 @@ function formatHeaderDate() {
   })
 }
 
+function formatShortDate(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
 // ---------- streak math ----------
 
 function isDone(status) {
@@ -137,7 +143,7 @@ function TallyMarks({ count }) {
 
 // ---------- heatmap strip ----------
 
-function Heatmap({ completions, onToggleDate }) {
+function Heatmap({ completions, selectedDate, onSelectDate }) {
   const today = todayStr()
   const cells = []
   for (let i = HEATMAP_DAYS - 1; i >= 0; i--) {
@@ -148,22 +154,27 @@ function Heatmap({ completions, onToggleDate }) {
       filled: isDone(status),
       skipped: isSkipped(status),
       isToday: dateStr === today,
+      isSelected: dateStr === selectedDate,
     })
   }
   return (
     <div className="heatmap" aria-label="Habit history">
       {cells.map((c) => {
         const statusLabel = c.filled ? 'completed' : c.skipped ? 'skipped' : 'not completed'
-        const label = `${c.dateStr}: ${statusLabel}${c.isToday ? ' (today)' : ''}`
+        const label = `${c.dateStr}: ${statusLabel}${c.isToday ? ' (today)' : ''}${
+          c.isSelected ? ' — selected' : ''
+        }`
         return (
           <button
             key={c.dateStr}
             type="button"
-            className={`cell ${c.filled ? 'filled' : ''} ${c.skipped ? 'skipped' : ''} ${c.isToday ? 'today' : ''}`}
+            className={`cell ${c.filled ? 'filled' : ''} ${c.skipped ? 'skipped' : ''} ${
+              c.isToday ? 'today' : ''
+            } ${c.isSelected ? 'selected' : ''}`}
             title={label}
             aria-label={label}
-            aria-pressed={c.filled}
-            onClick={() => onToggleDate(c.dateStr)}
+            aria-pressed={c.isSelected}
+            onClick={() => onSelectDate(c.dateStr)}
           />
         )
       })}
@@ -175,9 +186,8 @@ function Heatmap({ completions, onToggleDate }) {
 
 function HabitRow({
   habit,
-  onToggleToday,
-  onToggleSkipToday,
   onToggleDate,
+  onToggleSkip,
   onDelete,
   onRename,
   onDragStart,
@@ -188,15 +198,21 @@ function HabitRow({
   isDragOver,
 }) {
   const today = todayStr()
-  const todayStatus = habit.completions[today]
-  const doneToday = isDone(todayStatus)
-  const skippedToday = isSkipped(todayStatus)
+  const [selectedDate, setSelectedDate] = useState(null)
+  const activeDate = selectedDate || today
+  const activeStatus = habit.completions[activeDate]
+  const activeDone = isDone(activeStatus)
+  const activeSkipped = isSkipped(activeStatus)
   const streak = useMemo(() => currentStreak(habit.completions, today), [habit.completions, today])
   const best = useMemo(() => bestStreak(habit.completions), [habit.completions])
 
   const [isEditing, setIsEditing] = useState(false)
   const [draftName, setDraftName] = useState(habit.name)
   const [expanded, setExpanded] = useState(false)
+
+  function handleSelectDate(dateStr) {
+    setSelectedDate((prev) => (prev === dateStr ? null : dateStr))
+  }
 
   function startEditing() {
     setDraftName(habit.name)
@@ -291,17 +307,30 @@ function HabitRow({
             </>
           ) : (
             <>
+              {selectedDate && (
+                <span className="selected-date-pill">
+                  editing {formatShortDate(selectedDate)}
+                  <button
+                    className="clear-selection-btn"
+                    onClick={() => setSelectedDate(null)}
+                    aria-label="Stop editing this day, back to today"
+                    title="Back to today"
+                  >
+                    ✕
+                  </button>
+                </span>
+              )}
               <button
-                className={`mark-btn ${doneToday ? 'done' : ''}`}
-                onClick={() => onToggleToday(habit.id)}
+                className={`mark-btn ${activeDone ? 'done' : ''}`}
+                onClick={() => onToggleDate(habit.id, activeDate)}
               >
-                {doneToday ? '✓ done today' : 'mark today'}
+                {activeDone ? '✓ done' : 'mark'} {selectedDate ? formatShortDate(activeDate) : 'today'}
               </button>
               <button
-                className={`skip-btn ${skippedToday ? 'skipped' : ''}`}
-                onClick={() => onToggleSkipToday(habit.id)}
+                className={`skip-btn ${activeSkipped ? 'skipped' : ''}`}
+                onClick={() => onToggleSkip(habit.id, activeDate)}
               >
-                {skippedToday ? '↺ unskip' : 'skip'}
+                {activeSkipped ? '↺ unskip' : 'skip'}
               </button>
               <button
                 className={`expand-btn ${expanded ? 'expanded' : ''}`}
@@ -321,7 +350,7 @@ function HabitRow({
           )}
         </div>
       </div>
-      <Heatmap completions={habit.completions} onToggleDate={(dateStr) => onToggleDate(habit.id, dateStr)} />
+      <Heatmap completions={habit.completions} selectedDate={selectedDate} onSelectDate={handleSelectDate} />
     </div>
   )
 }
@@ -746,9 +775,8 @@ export default function App() {
             <HabitRow
               key={h.id}
               habit={h}
-              onToggleToday={toggleToday}
-              onToggleSkipToday={toggleSkipToday}
               onToggleDate={toggleDate}
+              onToggleSkip={toggleSkip}
               onDelete={deleteHabit}
               onRename={renameHabit}
               onDragStart={handleDragStart}
