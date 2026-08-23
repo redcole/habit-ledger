@@ -1,0 +1,203 @@
+From f8458affb73947ced6cdf3ea268a3a3a5ac74b57 Mon Sep 17 00:00:00 2001
+From: dev <dev@local>
+Date: Sun, 23 Aug 2026 07:39:16 +0000
+Subject: [PATCH] Add skip button per habit; skipped days show grey in the
+ heatmap
+
+---
+ src/App.jsx   | 58 +++++++++++++++++++++++++++++++++++++++++++--------
+ src/index.css | 27 ++++++++++++++++++++++++
+ 2 files changed, 76 insertions(+), 9 deletions(-)
+
+diff --git a/src/App.jsx b/src/App.jsx
+index 7f1764d..e0f01dc 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -41,15 +41,23 @@ function formatHeaderDate() {
+ 
+ // ---------- streak math ----------
+ 
++function isDone(status) {
++  return status === true
++}
++
++function isSkipped(status) {
++  return status === 'skipped'
++}
++
+ function currentStreak(completions, today) {
+   let streak = 0
+   let cursor = today
+   // if today isn't marked yet, start counting from yesterday so an
+   // unbroken streak doesn't visually reset to 0 before the day ends
+-  if (!completions[cursor]) {
++  if (!isDone(completions[cursor])) {
+     cursor = addDays(cursor, -1)
+   }
+-  while (completions[cursor]) {
++  while (isDone(completions[cursor])) {
+     streak += 1
+     cursor = addDays(cursor, -1)
+   }
+@@ -57,7 +65,7 @@ function currentStreak(completions, today) {
+ }
+ 
+ function bestStreak(completions) {
+-  const dates = Object.keys(completions).filter((d) => completions[d]).sort()
++  const dates = Object.keys(completions).filter((d) => isDone(completions[d])).sort()
+   if (dates.length === 0) return 0
+   let best = 1
+   let run = 1
+@@ -134,21 +142,24 @@ function Heatmap({ completions, onToggleDate }) {
+   const cells = []
+   for (let i = HEATMAP_DAYS - 1; i >= 0; i--) {
+     const dateStr = addDays(today, -i)
++    const status = completions[dateStr]
+     cells.push({
+       dateStr,
+-      filled: !!completions[dateStr],
++      filled: isDone(status),
++      skipped: isSkipped(status),
+       isToday: dateStr === today,
+     })
+   }
+   return (
+     <div className="heatmap" aria-label="Habit history">
+       {cells.map((c) => {
+-        const label = `${c.dateStr}: ${c.filled ? 'completed' : 'not completed'}${c.isToday ? ' (today)' : ''}`
++        const statusLabel = c.filled ? 'completed' : c.skipped ? 'skipped' : 'not completed'
++        const label = `${c.dateStr}: ${statusLabel}${c.isToday ? ' (today)' : ''}`
+         return (
+           <button
+             key={c.dateStr}
+             type="button"
+-            className={`cell ${c.filled ? 'filled' : ''} ${c.isToday ? 'today' : ''}`}
++            className={`cell ${c.filled ? 'filled' : ''} ${c.skipped ? 'skipped' : ''} ${c.isToday ? 'today' : ''}`}
+             title={label}
+             aria-label={label}
+             aria-pressed={c.filled}
+@@ -165,6 +176,7 @@ function Heatmap({ completions, onToggleDate }) {
+ function HabitRow({
+   habit,
+   onToggleToday,
++  onToggleSkipToday,
+   onToggleDate,
+   onDelete,
+   onRename,
+@@ -176,7 +188,9 @@ function HabitRow({
+   isDragOver,
+ }) {
+   const today = todayStr()
+-  const doneToday = !!habit.completions[today]
++  const todayStatus = habit.completions[today]
++  const doneToday = isDone(todayStatus)
++  const skippedToday = isSkipped(todayStatus)
+   const streak = useMemo(() => currentStreak(habit.completions, today), [habit.completions, today])
+   const best = useMemo(() => bestStreak(habit.completions), [habit.completions])
+ 
+@@ -282,6 +296,12 @@ function HabitRow({
+               >
+                 {doneToday ? '✓ done today' : 'mark today'}
+               </button>
++              <button
++                className={`skip-btn ${skippedToday ? 'skipped' : ''}`}
++                onClick={() => onToggleSkipToday(habit.id)}
++              >
++                {skippedToday ? '↺ unskip' : 'skip'}
++              </button>
+               <button className="edit-btn" onClick={startEditing} aria-label="Rename habit" title="Rename">
+                 ✎
+               </button>
+@@ -577,7 +597,7 @@ export default function App() {
+     const habit = habits.find((h) => h.id === id)
+     if (!habit) return
+     const completions = { ...habit.completions }
+-    if (completions[dateStr]) {
++    if (isDone(completions[dateStr])) {
+       delete completions[dateStr]
+     } else {
+       completions[dateStr] = true
+@@ -592,6 +612,25 @@ export default function App() {
+     await toggleDate(id, todayStr())
+   }
+ 
++  async function toggleSkip(id, dateStr) {
++    const habit = habits.find((h) => h.id === id)
++    if (!habit) return
++    const completions = { ...habit.completions }
++    if (isSkipped(completions[dateStr])) {
++      delete completions[dateStr]
++    } else {
++      completions[dateStr] = 'skipped'
++    }
++    setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, completions } : h)))
++    if (session) {
++      await supabase.from('habits').update({ completions }).eq('id', id)
++    }
++  }
++
++  async function toggleSkipToday(id) {
++    await toggleSkip(id, todayStr())
++  }
++
+   async function deleteHabit(id) {
+     setHabits((prev) => prev.filter((h) => h.id !== id))
+     if (session) {
+@@ -698,7 +737,8 @@ export default function App() {
+             <HabitRow
+               key={h.id}
+               habit={h}
+-              onToggleToday={toggleToday}
++              onToggleToday={toggleToday}
++              onToggleSkipToday={toggleSkipToday}
+               onToggleDate={toggleDate}
+               onDelete={deleteHabit}
+               onRename={renameHabit}
+diff --git a/src/index.css b/src/index.css
+index 75cc180..f820432 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -641,6 +641,29 @@ button {
+   color: #fff;
+ }
+ 
++.skip-btn {
++  border: 1px solid var(--muted);
++  background: transparent;
++  color: var(--muted);
++  font-family: var(--body);
++  font-size: 12px;
++  font-weight: 600;
++  padding: 8px 14px;
++  border-radius: 3px;
++  cursor: pointer;
++  transition: all 0.15s ease;
++  white-space: nowrap;
++}
++
++.skip-btn.skipped {
++  background: var(--muted);
++  color: #fff;
++}
++
++.skip-btn:hover {
++  filter: brightness(1.1);
++}
++
+ .mark-btn:hover {
+   filter: brightness(1.1);
+ }
+@@ -725,6 +748,10 @@ button {
+   border-color: var(--sage);
+ }
+ 
++.cell.skipped {
++  background: var(--muted);
++  border-color: var(--muted);
++}
+ 
+ .cell.today {
+   outline: 1px solid var(--amber);
+-- 
+2.43.0
+
