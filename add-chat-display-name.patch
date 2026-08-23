@@ -1,0 +1,91 @@
+From df7e1cb4b9be68a0e7d27b974c754226f3b7ed89 Mon Sep 17 00:00:00 2001
+From: dev <dev@local>
+Date: Sun, 23 Aug 2026 05:22:15 +0000
+Subject: [PATCH] Show display name in chat instead of email-derived name
+
+---
+ src/App.jsx                                      |  6 +++++-
+ src/ChatWidget.jsx                               |  5 +++--
+ supabase-migration-007-add-chat-display-name.sql | 10 ++++++++++
+ supabase-schema.sql                              |  1 +
+ 4 files changed, 19 insertions(+), 3 deletions(-)
+ create mode 100644 supabase-migration-007-add-chat-display-name.sql
+
+diff --git a/src/App.jsx b/src/App.jsx
+index 27cdfe2..9a8249a 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -707,7 +707,11 @@ export default function App() {
+           : `entries saved to this browser only · ${habits.length} habit${habits.length === 1 ? '' : 's'} tracked`}
+       </div>
+ 
+-      <ChatWidget session={session} configured={configured} />
++      <ChatWidget
++        session={session}
++        configured={configured}
++        displayName={profile?.full_name || session?.user.email}
++      />
+     </div>
+   )
+ }
+diff --git a/src/ChatWidget.jsx b/src/ChatWidget.jsx
+index 6990d2e..64cd8ff 100644
+--- a/src/ChatWidget.jsx
++++ b/src/ChatWidget.jsx
+@@ -14,7 +14,7 @@ function formatTime(iso) {
+   return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+ }
+ 
+-export default function ChatWidget({ session, configured }) {
++export default function ChatWidget({ session, configured, displayName }) {
+   const [open, setOpen] = useState(false)
+   const [messages, setMessages] = useState([])
+   const [loading, setLoading] = useState(false)
+@@ -102,6 +102,7 @@ export default function ChatWidget({ session, configured }) {
+     const { error: sendError } = await supabase.from('messages').insert({
+       user_id: session.user.id,
+       user_email: session.user.email,
++      user_display_name: displayName || null,
+       content: trimmed.slice(0, MAX_MESSAGE_LENGTH),
+       is_admin: isAdmin,
+     })
+@@ -173,7 +174,7 @@ export default function ChatWidget({ session, configured }) {
+               messages.map((m) => (
+                 <div key={m.id} className="chat-message">
+                   <div className="chat-message-meta">
+-                    <span className="chat-author">{displayNameFor(m.user_email)}</span>
++                    <span className="chat-author">{m.user_display_name || displayNameFor(m.user_email)}</span>
+                     {m.is_admin && <span className="chat-admin-badge">ADMIN</span>}
+                     <span className="chat-time">{formatTime(m.created_at)}</span>
+                     {isAdmin && (
+diff --git a/supabase-migration-007-add-chat-display-name.sql b/supabase-migration-007-add-chat-display-name.sql
+new file mode 100644
+index 0000000..18ea3dd
+--- /dev/null
++++ b/supabase-migration-007-add-chat-display-name.sql
+@@ -0,0 +1,10 @@
++-- Run this once to make the chat show each sender's real name (if they've
++-- set one) instead of always deriving a name from their email address.
++
++alter table public.messages add column if not exists user_display_name text;
++
++-- No RLS changes needed: the existing insert policy still applies as-is,
++-- and this column is simply along for the ride on every insert from here
++-- on. Older messages sent before this migration will have a null value
++-- here — the app falls back to the email-derived name for those, same as
++-- it always has.
+diff --git a/supabase-schema.sql b/supabase-schema.sql
+index 1672982..dbb3018 100644
+--- a/supabase-schema.sql
++++ b/supabase-schema.sql
+@@ -97,6 +97,7 @@ create table if not exists public.messages (
+   id uuid primary key default gen_random_uuid(),
+   user_id uuid not null references auth.users(id) on delete cascade,
+   user_email text not null,
++  user_display_name text,
+   content text not null check (char_length(content) <= 500),
+   is_admin boolean not null default false,
+   created_at timestamptz not null default now()
+-- 
+2.43.0
+
