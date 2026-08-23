@@ -574,6 +574,7 @@ button {
   background: var(--cell-empty);
   border: 1px solid var(--cell-border);
   flex-shrink: 0;
+  cursor: pointer;
 }
 
 .cell.filled {
