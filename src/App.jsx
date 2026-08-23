@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabaseClient'
 import AuthPanel from './Auth.jsx'
+import Settings from './Settings.jsx'
 import ImportBanner from './ImportBanner.jsx'
 import ChatWidget from './ChatWidget.jsx'
 
@@ -339,6 +340,42 @@ export default function App() {
     return () => listener.subscription.unsubscribe()
   }, [configured])
 
+  // ---------- profile (display name shown instead of email) ----------
+
+  const [profile, setProfile] = useState(null)
+
+  useEffect(() => {
+    if (!configured || !session) {
+      setProfile(null)
+      return
+    }
+    let cancelled = false
+    supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('user_id', session.user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setProfile(data)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [configured, session])
+
+  async function updateDisplayName(name) {
+    if (!session) return { error: 'not signed in' }
+    const trimmed = name.trim()
+    if (!trimmed) return { error: 'empty name' }
+    const { data, error } = await supabase
+      .from('profiles')
+      .upsert({ user_id: session.user.id, full_name: trimmed, updated_at: new Date().toISOString() })
+      .select('full_name')
+      .single()
+    if (!error && data) setProfile(data)
+    return { error }
+  }
+
   // ---------- habit state (local guest storage OR remote account storage) ----------
 
   const [habits, setHabits] = useState(() => {
@@ -596,19 +633,25 @@ export default function App() {
           <span className="date">
             <span className="dot">●</span> {formatHeaderDate()}
           </span>
-          <button
-            className="theme-toggle"
-            onClick={toggleTheme}
-            aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-            title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-          >
-            {theme === 'light' ? '☾' : '☀'}
-          </button>
+          <Settings
+            theme={theme}
+            onToggleTheme={toggleTheme}
+            session={session}
+            configured={configured}
+            displayName={profile?.full_name || ''}
+            onSaveName={updateDisplayName}
+          />
         </div>
       </div>
       <p className="subhead">a running tally of what you show up for</p>
 
-      {!authLoading && <AuthPanel session={session} configured={configured} />}
+      {!authLoading && (
+        <AuthPanel
+          session={session}
+          configured={configured}
+          displayName={profile?.full_name || session?.user.email}
+        />
+      )}
 
       {importCandidates.length > 0 && (
         <ImportBanner

@@ -1,0 +1,517 @@
+From 1f9065503264a5f129be3bb74e02fcfb87a9e33a Mon Sep 17 00:00:00 2001
+From: dev <dev@local>
+Date: Sun, 23 Aug 2026 05:11:27 +0000
+Subject: [PATCH] Add settings popover with theme toggle and display-name
+ editing
+
+---
+ src/App.jsx      |  61 +++++++++++++++---
+ src/Auth.jsx     |  97 ++--------------------------
+ src/Settings.jsx | 102 +++++++++++++++++++++++++++++
+ src/index.css    | 163 +++++++++++++++++++++++++++++++++++++++--------
+ 4 files changed, 297 insertions(+), 126 deletions(-)
+ create mode 100644 src/Settings.jsx
+
+diff --git a/src/App.jsx b/src/App.jsx
+index ababa49..984f005 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -1,6 +1,7 @@
+ import { useEffect, useMemo, useState } from 'react'
+ import { supabase } from './supabaseClient'
+ import AuthPanel from './Auth.jsx'
++import Settings from './Settings.jsx'
+ import ImportBanner from './ImportBanner.jsx'
+ import ChatWidget from './ChatWidget.jsx'
+ 
+@@ -339,6 +340,42 @@ export default function App() {
+     return () => listener.subscription.unsubscribe()
+   }, [configured])
+ 
++  // ---------- profile (display name shown instead of email) ----------
++
++  const [profile, setProfile] = useState(null)
++
++  useEffect(() => {
++    if (!configured || !session) {
++      setProfile(null)
++      return
++    }
++    let cancelled = false
++    supabase
++      .from('profiles')
++      .select('full_name')
++      .eq('user_id', session.user.id)
++      .maybeSingle()
++      .then(({ data }) => {
++        if (!cancelled) setProfile(data)
++      })
++    return () => {
++      cancelled = true
++    }
++  }, [configured, session])
++
++  async function updateDisplayName(name) {
++    if (!session) return { error: 'not signed in' }
++    const trimmed = name.trim()
++    if (!trimmed) return { error: 'empty name' }
++    const { data, error } = await supabase
++      .from('profiles')
++      .upsert({ user_id: session.user.id, full_name: trimmed, updated_at: new Date().toISOString() })
++      .select('full_name')
++      .single()
++    if (!error && data) setProfile(data)
++    return { error }
++  }
++
+   // ---------- habit state (local guest storage OR remote account storage) ----------
+ 
+   const [habits, setHabits] = useState(() => {
+@@ -596,19 +633,25 @@ export default function App() {
+           <span className="date">
+             <span className="dot">●</span> {formatHeaderDate()}
+           </span>
+-          <button
+-            className="theme-toggle"
+-            onClick={toggleTheme}
+-            aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+-            title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+-          >
+-            {theme === 'light' ? '☾' : '☀'}
+-          </button>
++          <Settings
++            theme={theme}
++            onToggleTheme={toggleTheme}
++            session={session}
++            configured={configured}
++            displayName={profile?.full_name || ''}
++            onSaveName={updateDisplayName}
++          />
+         </div>
+       </div>
+       <p className="subhead">a running tally of what you show up for</p>
+ 
+-      {!authLoading && <AuthPanel session={session} configured={configured} />}
++      {!authLoading && (
++        <AuthPanel
++          session={session}
++          configured={configured}
++          displayName={profile?.full_name || session?.user.email}
++        />
++      )}
+ 
+       {importCandidates.length > 0 && (
+         <ImportBanner
+diff --git a/src/Auth.jsx b/src/Auth.jsx
+index 7c26adf..d700048 100644
+--- a/src/Auth.jsx
++++ b/src/Auth.jsx
+@@ -1,7 +1,7 @@
+-import { useEffect, useState } from 'react'
++import { useState } from 'react'
+ import { supabase } from './supabaseClient'
+ 
+-export default function AuthPanel({ session, configured }) {
++export default function AuthPanel({ session, configured, displayName }) {
+   const [open, setOpen] = useState(false)
+   const [mode, setMode] = useState('signin') // 'signin' | 'signup'
+   const [fullName, setFullName] = useState('')
+@@ -11,60 +11,6 @@ export default function AuthPanel({ session, configured }) {
+   const [info, setInfo] = useState('')
+   const [loading, setLoading] = useState(false)
+ 
+-  // ---------- profile (real name) ----------
+-
+-  const [profile, setProfile] = useState(null)
+-  const [isEditingName, setIsEditingName] = useState(false)
+-  const [draftName, setDraftName] = useState('')
+-  const [savingName, setSavingName] = useState(false)
+-
+-  useEffect(() => {
+-    if (!session) {
+-      setProfile(null)
+-      return
+-    }
+-    let cancelled = false
+-    supabase
+-      .from('profiles')
+-      .select('full_name')
+-      .eq('user_id', session.user.id)
+-      .maybeSingle()
+-      .then(({ data }) => {
+-        if (!cancelled) setProfile(data)
+-      })
+-    return () => {
+-      cancelled = true
+-    }
+-  }, [session])
+-
+-  const displayName = profile?.full_name || session?.user.email
+-
+-  function startEditingName() {
+-    setDraftName(profile?.full_name || '')
+-    setIsEditingName(true)
+-  }
+-
+-  function cancelEditingName() {
+-    setIsEditingName(false)
+-  }
+-
+-  async function saveName(e) {
+-    e.preventDefault()
+-    const trimmed = draftName.trim()
+-    if (!trimmed || !session) return
+-    setSavingName(true)
+-    const { data, error: saveError } = await supabase
+-      .from('profiles')
+-      .upsert({ user_id: session.user.id, full_name: trimmed, updated_at: new Date().toISOString() })
+-      .select('full_name')
+-      .single()
+-    setSavingName(false)
+-    if (!saveError && data) {
+-      setProfile(data)
+-      setIsEditingName(false)
+-    }
+-  }
+-
+   async function handleSubmit(e) {
+     e.preventDefault()
+     setError('')
+@@ -114,41 +60,10 @@ export default function AuthPanel({ session, configured }) {
+   if (session) {
+     return (
+       <div className="account-bar">
+-        {isEditingName ? (
+-          <form className="account-name-form" onSubmit={saveName}>
+-            <span className="account-status">
+-              <span className="account-dot" /> Signed in as
+-            </span>
+-            <input
+-              className="account-name-input"
+-              type="text"
+-              value={draftName}
+-              autoFocus
+-              maxLength={80}
+-              placeholder="your name"
+-              onChange={(e) => setDraftName(e.target.value)}
+-              onKeyDown={(e) => e.key === 'Escape' && cancelEditingName()}
+-            />
+-            <button className="account-link-btn" type="submit" disabled={savingName || !draftName.trim()}>
+-              {savingName ? '...' : 'save'}
+-            </button>
+-            <button type="button" className="account-link-btn" onClick={cancelEditingName}>
+-              cancel
+-            </button>
+-          </form>
+-        ) : (
+-          <span className="account-status">
+-            <span className="account-dot" /> Signed in as <strong>{displayName}</strong>
+-            <button
+-              className="edit-btn account-edit-name-btn"
+-              onClick={startEditingName}
+-              aria-label="Edit your name"
+-              title="Edit your name"
+-            >
+-              ✎
+-            </button>
+-          </span>
+-        )}
++        <span className="account-status">
++          <span className="account-dot" /> Signed in as{' '}
++          <strong>{displayName || session.user.email}</strong>
++        </span>
+         <button className="account-link-btn" onClick={handleSignOut}>
+           sign out
+         </button>
+diff --git a/src/Settings.jsx b/src/Settings.jsx
+new file mode 100644
+index 0000000..a1f48cc
+--- /dev/null
++++ b/src/Settings.jsx
+@@ -0,0 +1,102 @@
++import { useEffect, useRef, useState } from 'react'
++
++export default function Settings({ theme, onToggleTheme, session, configured, displayName, onSaveName }) {
++  const [open, setOpen] = useState(false)
++  const [draftName, setDraftName] = useState(displayName || '')
++  const [saving, setSaving] = useState(false)
++  const [saved, setSaved] = useState(false)
++  const wrapperRef = useRef(null)
++
++  useEffect(() => {
++    setDraftName(displayName || '')
++  }, [displayName])
++
++  useEffect(() => {
++    if (!open) return
++    function handleClickOutside(e) {
++      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
++        setOpen(false)
++      }
++    }
++    function handleEscape(e) {
++      if (e.key === 'Escape') setOpen(false)
++    }
++    document.addEventListener('mousedown', handleClickOutside)
++    document.addEventListener('keydown', handleEscape)
++    return () => {
++      document.removeEventListener('mousedown', handleClickOutside)
++      document.removeEventListener('keydown', handleEscape)
++    }
++  }, [open])
++
++  async function handleSaveName(e) {
++    e.preventDefault()
++    const trimmed = draftName.trim()
++    if (!trimmed) return
++    setSaving(true)
++    setSaved(false)
++    const { error } = await onSaveName(trimmed)
++    setSaving(false)
++    if (!error) {
++      setSaved(true)
++      setTimeout(() => setSaved(false), 1500)
++    }
++  }
++
++  return (
++    <div className="settings-widget" ref={wrapperRef}>
++      <button
++        className="settings-toggle"
++        onClick={() => setOpen((o) => !o)}
++        aria-label="Settings"
++        title="Settings"
++      >
++        ⚙
++      </button>
++
++      {open && (
++        <div className="settings-panel">
++          <div className="settings-panel-header">
++            <span>Settings</span>
++            <button className="chat-close" onClick={() => setOpen(false)} aria-label="Close settings">
++              ✕
++            </button>
++          </div>
++
++          <div className="settings-section">
++            <span className="settings-label">Appearance</span>
++            <button className="settings-theme-btn" onClick={onToggleTheme}>
++              {theme === 'light' ? '☾ Switch to dark' : '☀ Switch to light'}
++            </button>
++          </div>
++
++          {configured && session && (
++            <div className="settings-section">
++              <span className="settings-label">Display name</span>
++              <form className="settings-name-form" onSubmit={handleSaveName}>
++                <input
++                  type="text"
++                  value={draftName}
++                  onChange={(e) => setDraftName(e.target.value)}
++                  maxLength={80}
++                  placeholder="your name"
++                />
++                <button type="submit" disabled={saving || !draftName.trim()}>
++                  {saving ? '...' : saved ? 'saved' : 'save'}
++                </button>
++              </form>
++              <span className="settings-hint">Shown instead of your email when signed in.</span>
++            </div>
++          )}
++
++          {configured && !session && (
++            <div className="settings-section">
++              <span className="settings-label">Display name</span>
++              <span className="settings-hint">Sign in to set a display name.</span>
++            </div>
++          )}
++        </div>
++      )}
++    </div>
++  )
++}
+diff --git a/src/index.css b/src/index.css
+index b786296..1de30af 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -138,32 +138,6 @@ button {
+   text-decoration: none;
+ }
+ 
+-.account-edit-name-btn {
+-  padding: 2px 4px;
+-  font-size: 12px;
+-  vertical-align: middle;
+-}
+-
+-.account-name-form {
+-  display: flex;
+-  align-items: center;
+-  flex-wrap: wrap;
+-  gap: 6px 10px;
+-  flex: 1;
+-  min-width: 200px;
+-}
+-
+-.account-name-input {
+-  font-family: var(--body);
+-  font-size: 12px;
+-  color: var(--ink);
+-  background: var(--panel-raised);
+-  border: 1px solid var(--amber);
+-  border-radius: 3px;
+-  padding: 4px 8px;
+-  outline: none;
+-}
+-
+ .account-link-btn-accent {
+   text-decoration: none;
+   background: var(--amber);
+@@ -312,6 +286,143 @@ button {
+   color: var(--amber);
+ }
+ 
++/* ---------- Settings popover ---------- */
++
++.settings-widget {
++  position: relative;
++}
++
++.settings-toggle {
++  border: 1px solid var(--border);
++  background: var(--panel);
++  color: var(--ink-dim);
++  width: 30px;
++  height: 30px;
++  border-radius: 4px;
++  cursor: pointer;
++  font-size: 14px;
++  display: flex;
++  align-items: center;
++  justify-content: center;
++  transition: border-color 0.15s ease, color 0.15s ease;
++  flex-shrink: 0;
++}
++
++.settings-toggle:hover {
++  border-color: var(--amber);
++  color: var(--amber);
++}
++
++.settings-panel {
++  position: absolute;
++  top: calc(100% + 8px);
++  right: 0;
++  width: min(280px, calc(100vw - 40px));
++  background: var(--panel);
++  border: 1px solid var(--border);
++  border-radius: 8px;
++  box-shadow: 0 8px 30px rgba(35, 43, 37, 0.2);
++  z-index: 60;
++  overflow: hidden;
++}
++
++.settings-panel-header {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  padding: 12px 14px;
++  border-bottom: 1px solid var(--border);
++  font-family: var(--display);
++  font-weight: 600;
++  font-size: 14px;
++  color: var(--ink);
++  background: var(--panel-raised);
++}
++
++.settings-section {
++  padding: 12px 14px;
++  display: flex;
++  flex-direction: column;
++  gap: 6px;
++}
++
++.settings-section + .settings-section {
++  border-top: 1px solid var(--border);
++}
++
++.settings-label {
++  font-size: 11px;
++  font-weight: 600;
++  text-transform: uppercase;
++  letter-spacing: 0.04em;
++  color: var(--ink-dim);
++}
++
++.settings-theme-btn {
++  align-self: flex-start;
++  border: 1px solid var(--border);
++  background: var(--panel-raised);
++  color: var(--ink);
++  font-family: var(--body);
++  font-size: 12px;
++  font-weight: 600;
++  padding: 6px 10px;
++  border-radius: 4px;
++  cursor: pointer;
++  transition: border-color 0.15s ease, color 0.15s ease;
++}
++
++.settings-theme-btn:hover {
++  border-color: var(--amber);
++  color: var(--amber);
++}
++
++.settings-name-form {
++  display: flex;
++  gap: 8px;
++}
++
++.settings-name-form input {
++  flex: 1;
++  min-width: 0;
++  font-family: var(--body);
++  font-size: 12px;
++  color: var(--ink);
++  background: var(--panel-raised);
++  border: 1px solid var(--border);
++  border-radius: 4px;
++  padding: 6px 8px;
++  outline: none;
++}
++
++.settings-name-form input:focus {
++  border-color: var(--amber);
++}
++
++.settings-name-form button {
++  border: 1px solid var(--amber);
++  background: var(--amber);
++  color: var(--on-accent);
++  font-family: var(--body);
++  font-size: 12px;
++  font-weight: 600;
++  padding: 6px 10px;
++  border-radius: 4px;
++  cursor: pointer;
++  white-space: nowrap;
++}
++
++.settings-name-form button:disabled {
++  background: var(--muted);
++  border-color: var(--muted);
++  cursor: not-allowed;
++}
++
++.settings-hint {
++  font-size: 11px;
++  color: var(--ink-dim);
++}
++
+ .rule {
+   border: none;
+   border-top: 1px solid var(--border);
+-- 
+2.43.0
+

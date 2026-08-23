@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { supabase } from './supabaseClient'
 
-export default function AuthPanel({ session, configured }) {
+export default function AuthPanel({ session, configured, displayName }) {
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState('signin') // 'signin' | 'signup'
   const [fullName, setFullName] = useState('')
@@ -10,60 +10,6 @@ export default function AuthPanel({ session, configured }) {
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
-
-  // ---------- profile (real name) ----------
-
-  const [profile, setProfile] = useState(null)
-  const [isEditingName, setIsEditingName] = useState(false)
-  const [draftName, setDraftName] = useState('')
-  const [savingName, setSavingName] = useState(false)
-
-  useEffect(() => {
-    if (!session) {
-      setProfile(null)
-      return
-    }
-    let cancelled = false
-    supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('user_id', session.user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!cancelled) setProfile(data)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [session])
-
-  const displayName = profile?.full_name || session?.user.email
-
-  function startEditingName() {
-    setDraftName(profile?.full_name || '')
-    setIsEditingName(true)
-  }
-
-  function cancelEditingName() {
-    setIsEditingName(false)
-  }
-
-  async function saveName(e) {
-    e.preventDefault()
-    const trimmed = draftName.trim()
-    if (!trimmed || !session) return
-    setSavingName(true)
-    const { data, error: saveError } = await supabase
-      .from('profiles')
-      .upsert({ user_id: session.user.id, full_name: trimmed, updated_at: new Date().toISOString() })
-      .select('full_name')
-      .single()
-    setSavingName(false)
-    if (!saveError && data) {
-      setProfile(data)
-      setIsEditingName(false)
-    }
-  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -114,41 +60,10 @@ export default function AuthPanel({ session, configured }) {
   if (session) {
     return (
       <div className="account-bar">
-        {isEditingName ? (
-          <form className="account-name-form" onSubmit={saveName}>
-            <span className="account-status">
-              <span className="account-dot" /> Signed in as
-            </span>
-            <input
-              className="account-name-input"
-              type="text"
-              value={draftName}
-              autoFocus
-              maxLength={80}
-              placeholder="your name"
-              onChange={(e) => setDraftName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Escape' && cancelEditingName()}
-            />
-            <button className="account-link-btn" type="submit" disabled={savingName || !draftName.trim()}>
-              {savingName ? '...' : 'save'}
-            </button>
-            <button type="button" className="account-link-btn" onClick={cancelEditingName}>
-              cancel
-            </button>
-          </form>
-        ) : (
-          <span className="account-status">
-            <span className="account-dot" /> Signed in as <strong>{displayName}</strong>
-            <button
-              className="edit-btn account-edit-name-btn"
-              onClick={startEditingName}
-              aria-label="Edit your name"
-              title="Edit your name"
-            >
-              ✎
-            </button>
-          </span>
-        )}
+        <span className="account-status">
+          <span className="account-dot" /> Signed in as{' '}
+          <strong>{displayName || session.user.email}</strong>
+        </span>
         <button className="account-link-btn" onClick={handleSignOut}>
           sign out
         </button>
