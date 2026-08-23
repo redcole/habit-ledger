@@ -129,7 +129,7 @@ function TallyMarks({ count }) {
 
 // ---------- heatmap strip ----------
 
-function Heatmap({ completions }) {
+function Heatmap({ completions, onToggleDate }) {
   const today = todayStr()
   const cells = []
   for (let i = HEATMAP_DAYS - 1; i >= 0; i--) {
@@ -141,14 +141,21 @@ function Heatmap({ completions }) {
     })
   }
   return (
-    <div className="heatmap">
-      {cells.map((c) => (
-        <div
-          key={c.dateStr}
-          className={`cell ${c.filled ? 'filled' : ''} ${c.isToday ? 'today' : ''}`}
-          title={c.dateStr}
-        />
-      ))}
+    <div className="heatmap" aria-label="Habit history">
+      {cells.map((c) => {
+        const label = `${c.dateStr}: ${c.filled ? 'completed' : 'not completed'}${c.isToday ? ' (today)' : ''}`
+        return (
+          <button
+            key={c.dateStr}
+            type="button"
+            className={`cell ${c.filled ? 'filled' : ''} ${c.isToday ? 'today' : ''}`}
+            title={label}
+            aria-label={label}
+            aria-pressed={c.filled}
+            onClick={() => onToggleDate(c.dateStr)}
+          />
+        )
+      })}
     </div>
   )
 }
@@ -158,6 +165,7 @@ function Heatmap({ completions }) {
 function HabitRow({
   habit,
   onToggleToday,
+  onToggleDate,
   onDelete,
   onRename,
   onDragStart,
@@ -284,7 +292,7 @@ function HabitRow({
           )}
         </div>
       </div>
-      <Heatmap completions={habit.completions} />
+      <Heatmap completions={habit.completions} onToggleDate={(dateStr) => onToggleDate(habit.id, dateStr)} />
     </div>
   )
 }
@@ -565,20 +573,23 @@ export default function App() {
     ])
   }
 
-  async function toggleToday(id) {
-    const today = todayStr()
+  async function toggleDate(id, dateStr) {
     const habit = habits.find((h) => h.id === id)
     if (!habit) return
     const completions = { ...habit.completions }
-    if (completions[today]) {
-      delete completions[today]
+    if (completions[dateStr]) {
+      delete completions[dateStr]
     } else {
-      completions[today] = true
+      completions[dateStr] = true
     }
     setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, completions } : h)))
     if (session) {
       await supabase.from('habits').update({ completions }).eq('id', id)
     }
+  }
+
+  async function toggleToday(id) {
+    await toggleDate(id, todayStr())
   }
 
   async function deleteHabit(id) {
@@ -688,6 +699,7 @@ export default function App() {
               key={h.id}
               habit={h}
               onToggleToday={toggleToday}
+              onToggleDate={toggleDate}
               onDelete={deleteHabit}
               onRename={renameHabit}
               onDragStart={handleDragStart}

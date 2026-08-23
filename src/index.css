@@ -719,6 +719,20 @@ button {
   background: var(--cell-empty);
   border: 1px solid var(--cell-border);
   flex-shrink: 0;
+  padding: 0;
+  cursor: pointer;
+  appearance: none;
+  transition: transform 0.1s ease, border-color 0.1s ease, background-color 0.1s ease;
+}
+
+.cell:hover {
+  transform: scale(1.35);
+  border-color: var(--amber);
+}
+
+.cell:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
 }
 
 .cell.filled {
