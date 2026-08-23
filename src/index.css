@@ -15,7 +15,6 @@
   --cell-empty: #dde2d3;
   --cell-border: #c7cdb9;
   --on-accent: #ffffff;
-  --rule: #000000;
 
   --display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   --body: "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -38,7 +37,6 @@
   --cell-empty: #232d31;
   --cell-border: #303c40;
   --on-accent: #12181c;
-  --rule: var(--border);
 }
 
 * {
@@ -288,152 +286,9 @@ button {
   color: var(--amber);
 }
 
-/* ---------- Settings popover ---------- */
-
-.settings-widget {
-  position: relative;
-}
-
-.settings-toggle {
-  border: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--ink-dim);
-  width: 30px;
-  height: 30px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: border-color 0.15s ease, color 0.15s ease;
-  flex-shrink: 0;
-}
-
-.settings-toggle:hover {
-  border-color: var(--amber);
-  color: var(--amber);
-}
-
-.settings-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  width: min(280px, calc(100vw - 40px));
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 30px rgba(35, 43, 37, 0.2);
-  z-index: 60;
-  overflow: hidden;
-}
-
-.settings-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--rule);
-  font-family: var(--display);
-  font-weight: 600;
-  font-size: 14px;
-  color: var(--ink);
-  background: var(--panel-raised);
-}
-
-.settings-section {
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.settings-section + .settings-section {
-  border-top: 1px solid var(--rule);
-}
-
-.settings-label {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--ink-dim);
-}
-
-.settings-theme-btn {
-  align-self: flex-start;
-  border: 1px solid var(--border);
-  background: var(--panel-raised);
-  color: var(--ink);
-  font-family: var(--body);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 6px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
-}
-
-.settings-theme-btn:hover {
-  border-color: var(--amber);
-  color: var(--amber);
-}
-
-.settings-name-form {
-  display: flex;
-  gap: 8px;
-}
-
-.settings-name-form input {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--body);
-  font-size: 12px;
-  color: var(--ink);
-  background: var(--panel-raised);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 6px 8px;
-  outline: none;
-}
-
-.settings-name-form input:focus {
-  border-color: var(--amber);
-}
-
-.settings-name-form button {
-  border: 1px solid var(--amber);
-  background: var(--amber);
-  color: var(--on-accent);
-  font-family: var(--body);
-  font-size: 12px;
-  font-weight: 600;
-  padding: 6px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.settings-name-form button:disabled {
-  background: var(--muted);
-  border-color: var(--muted);
-  cursor: not-allowed;
-}
-
-.settings-hint {
-  font-size: 11px;
-  color: var(--ink-dim);
-}
-
-.settings-error {
-  font-size: 11px;
-  color: var(--rust);
-  margin: 0;
-}
-
 .rule {
   border: none;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--border);
   margin: 20px 0;
 }
 
@@ -719,20 +574,6 @@ button {
   background: var(--cell-empty);
   border: 1px solid var(--cell-border);
   flex-shrink: 0;
-  padding: 0;
-  cursor: pointer;
-  appearance: none;
-  transition: transform 0.1s ease, border-color 0.1s ease, background-color 0.1s ease;
-}
-
-.cell:hover {
-  transform: scale(1.35);
-  border-color: var(--amber);
-}
-
-.cell:focus-visible {
-  outline: 2px solid var(--amber);
-  outline-offset: 2px;
 }
 
 .cell.filled {
@@ -799,7 +640,7 @@ button {
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border);
   font-family: var(--display);
   font-weight: 600;
   font-size: 14px;
@@ -918,7 +759,7 @@ button {
   display: flex;
   gap: 8px;
   padding: 10px;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
 
@@ -959,7 +800,7 @@ button {
   margin: 0;
   font-size: 12px;
   color: var(--muted);
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
 
