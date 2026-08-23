@@ -15,6 +15,7 @@
   --cell-empty: #dde2d3;
   --cell-border: #c7cdb9;
   --on-accent: #ffffff;
+  --rule: #000000;
 
   --display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   --body: "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -37,6 +38,7 @@
   --cell-empty: #232d31;
   --cell-border: #303c40;
   --on-accent: #12181c;
+  --rule: var(--border);
 }
 
 * {
@@ -331,7 +333,7 @@ button {
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--rule);
   font-family: var(--display);
   font-weight: 600;
   font-size: 14px;
@@ -347,7 +349,7 @@ button {
 }
 
 .settings-section + .settings-section {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--rule);
 }
 
 .settings-label {
@@ -431,7 +433,7 @@ button {
 
 .rule {
   border: none;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--rule);
   margin: 20px 0;
 }
 
@@ -783,7 +785,7 @@ button {
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--rule);
   font-family: var(--display);
   font-weight: 600;
   font-size: 14px;
@@ -902,7 +904,7 @@ button {
   display: flex;
   gap: 8px;
   padding: 10px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--rule);
   flex-shrink: 0;
 }
 
@@ -943,7 +945,7 @@ button {
   margin: 0;
   font-size: 12px;
   color: var(--muted);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--rule);
   flex-shrink: 0;
 }
 
