@@ -1,13 +1,13 @@
-From f8458affb73947ced6cdf3ea268a3a3a5ac74b57 Mon Sep 17 00:00:00 2001
+From b9369a53a07e2c417cb58a235b3d69c83a0a8fce Mon Sep 17 00:00:00 2001
 From: dev <dev@local>
-Date: Sun, 23 Aug 2026 07:39:16 +0000
+Date: Sun, 23 Aug 2026 21:02:20 +0000
 Subject: [PATCH] Add skip button per habit; skipped days show grey in the
  heatmap
 
 ---
  src/App.jsx   | 58 +++++++++++++++++++++++++++++++++++++++++++--------
- src/index.css | 27 ++++++++++++++++++++++++
- 2 files changed, 76 insertions(+), 9 deletions(-)
+ src/index.css | 28 +++++++++++++++++++++++++
+ 2 files changed, 77 insertions(+), 9 deletions(-)
 
 diff --git a/src/App.jsx b/src/App.jsx
 index 7f1764d..e0f01dc 100644
@@ -154,7 +154,7 @@ index 7f1764d..e0f01dc 100644
                onDelete={deleteHabit}
                onRename={renameHabit}
 diff --git a/src/index.css b/src/index.css
-index 75cc180..f820432 100644
+index 99cd718..5e78aba 100644
 --- a/src/index.css
 +++ b/src/index.css
 @@ -641,6 +641,29 @@ button {
@@ -187,7 +187,7 @@ index 75cc180..f820432 100644
  .mark-btn:hover {
    filter: brightness(1.1);
  }
-@@ -725,6 +748,10 @@ button {
+@@ -725,6 +748,11 @@ button {
    border-color: var(--sage);
  }
  
@@ -195,9 +195,10 @@ index 75cc180..f820432 100644
 +  background: var(--muted);
 +  border-color: var(--muted);
 +}
- 
++
  .cell.today {
    outline: 1px solid var(--amber);
+   outline-offset: 1px;
 -- 
 2.43.0
 
