@@ -1,0 +1,102 @@
+From 2aed146f63ed8479bac117ada390cba7e78b1047 Mon Sep 17 00:00:00 2001
+From: dev <dev@local>
+Date: Sun, 23 Aug 2026 05:17:16 +0000
+Subject: [PATCH] Surface errors when saving display name fails
+
+---
+ src/App.jsx      | 11 +++++++++--
+ src/Settings.jsx | 22 +++++++++++++++++-----
+ src/index.css    |  6 ++++++
+ 3 files changed, 32 insertions(+), 7 deletions(-)
+
+diff --git a/src/App.jsx b/src/App.jsx
+index 984f005..27cdfe2 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -369,10 +369,17 @@ export default function App() {
+     if (!trimmed) return { error: 'empty name' }
+     const { data, error } = await supabase
+       .from('profiles')
+-      .upsert({ user_id: session.user.id, full_name: trimmed, updated_at: new Date().toISOString() })
++      .upsert(
++        { user_id: session.user.id, full_name: trimmed, updated_at: new Date().toISOString() },
++        { onConflict: 'user_id' }
++      )
+       .select('full_name')
+       .single()
+-    if (!error && data) setProfile(data)
++    if (error) {
++      console.error('Failed to save display name:', error)
++    } else if (data) {
++      setProfile(data)
++    }
+     return { error }
+   }
+ 
+diff --git a/src/Settings.jsx b/src/Settings.jsx
+index a1f48cc..1bdb2c3 100644
+--- a/src/Settings.jsx
++++ b/src/Settings.jsx
+@@ -5,6 +5,7 @@ export default function Settings({ theme, onToggleTheme, session, configured, di
+   const [draftName, setDraftName] = useState(displayName || '')
+   const [saving, setSaving] = useState(false)
+   const [saved, setSaved] = useState(false)
++  const [nameError, setNameError] = useState('')
+   const wrapperRef = useRef(null)
+ 
+   useEffect(() => {
+@@ -35,11 +36,21 @@ export default function Settings({ theme, onToggleTheme, session, configured, di
+     if (!trimmed) return
+     setSaving(true)
+     setSaved(false)
+-    const { error } = await onSaveName(trimmed)
+-    setSaving(false)
+-    if (!error) {
+-      setSaved(true)
+-      setTimeout(() => setSaved(false), 1500)
++    setNameError('')
++    try {
++      const { error } = await onSaveName(trimmed)
++      if (error) {
++        console.error('Failed to save display name:', error)
++        setNameError(typeof error === 'string' ? error : error.message || 'Could not save your name.')
++      } else {
++        setSaved(true)
++        setTimeout(() => setSaved(false), 1500)
++      }
++    } catch (err) {
++      console.error('Failed to save display name:', err)
++      setNameError(err.message || 'Could not save your name.')
++    } finally {
++      setSaving(false)
+     }
+   }
+ 
+@@ -86,6 +97,7 @@ export default function Settings({ theme, onToggleTheme, session, configured, di
+                 </button>
+               </form>
+               <span className="settings-hint">Shown instead of your email when signed in.</span>
++              {nameError && <p className="settings-error">{nameError}</p>}
+             </div>
+           )}
+ 
+diff --git a/src/index.css b/src/index.css
+index 1de30af..aa1d286 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -423,6 +423,12 @@ button {
+   color: var(--ink-dim);
+ }
+ 
++.settings-error {
++  font-size: 11px;
++  color: var(--rust);
++  margin: 0;
++}
++
+ .rule {
+   border: none;
+   border-top: 1px solid var(--border);
+-- 
+2.43.0
+
