@@ -369,10 +369,17 @@ export default function App() {
     if (!trimmed) return { error: 'empty name' }
     const { data, error } = await supabase
       .from('profiles')
-      .upsert({ user_id: session.user.id, full_name: trimmed, updated_at: new Date().toISOString() })
+      .upsert(
+        { user_id: session.user.id, full_name: trimmed, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      )
       .select('full_name')
       .single()
-    if (!error && data) setProfile(data)
+    if (error) {
+      console.error('Failed to save display name:', error)
+    } else if (data) {
+      setProfile(data)
+    }
     return { error }
   }
 

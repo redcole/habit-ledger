@@ -5,6 +5,7 @@ export default function Settings({ theme, onToggleTheme, session, configured, di
   const [draftName, setDraftName] = useState(displayName || '')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [nameError, setNameError] = useState('')
   const wrapperRef = useRef(null)
 
   useEffect(() => {
@@ -35,11 +36,21 @@ export default function Settings({ theme, onToggleTheme, session, configured, di
     if (!trimmed) return
     setSaving(true)
     setSaved(false)
-    const { error } = await onSaveName(trimmed)
-    setSaving(false)
-    if (!error) {
-      setSaved(true)
-      setTimeout(() => setSaved(false), 1500)
+    setNameError('')
+    try {
+      const { error } = await onSaveName(trimmed)
+      if (error) {
+        console.error('Failed to save display name:', error)
+        setNameError(typeof error === 'string' ? error : error.message || 'Could not save your name.')
+      } else {
+        setSaved(true)
+        setTimeout(() => setSaved(false), 1500)
+      }
+    } catch (err) {
+      console.error('Failed to save display name:', err)
+      setNameError(err.message || 'Could not save your name.')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -86,6 +97,7 @@ export default function Settings({ theme, onToggleTheme, session, configured, di
                 </button>
               </form>
               <span className="settings-hint">Shown instead of your email when signed in.</span>
+              {nameError && <p className="settings-error">{nameError}</p>}
             </div>
           )}
 

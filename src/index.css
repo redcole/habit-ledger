@@ -423,6 +423,12 @@ button {
   color: var(--ink-dim);
 }
 
+.settings-error {
+  font-size: 11px;
+  color: var(--rust);
+  margin: 0;
+}
+
 .rule {
   border: none;
   border-top: 1px solid var(--border);
