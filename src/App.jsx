@@ -187,7 +187,6 @@ function WeekOverview({ completions, selectedDate, onSelectDate }) {
     <div className="week-overview" aria-label="This week">
       <div className="week-overview-heading">
         <span>Last 7 days</span>
-        <span className="week-overview-hint">tap a day to mark it done</span>
       </div>
       <div className="week-days">
         {week.map((dateStr, index) => {

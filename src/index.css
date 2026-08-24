@@ -11,6 +11,7 @@
   --amber-tint: #f4e6c9;
   --sage: #4c7a48;
   --sage-tint: #dcebd6;
+  --skipped: #5f6462;
   --rust: #a34a3a;
   --cell-empty: #dde2d3;
   --cell-border: #c7cdb9;
@@ -33,6 +34,7 @@
   --amber-tint: #4a3d24;
   --sage: #7c9a72;
   --sage-tint: #2c3529;
+  --skipped: #596267;
   --rust: #b85c4a;
   --cell-empty: #232d31;
   --cell-border: #303c40;
@@ -791,7 +793,6 @@ button {
   font-weight: 600;
 }
 
-.week-overview-hint,
 .history-legend {
   color: var(--muted);
   font-size: 11px;
@@ -823,7 +824,11 @@ button {
 .week-day:hover { border-color: var(--sage); }
 .week-day.today { box-shadow: inset 0 0 0 1px var(--amber); }
 .week-day.done { background: var(--sage); border-color: var(--sage); color: #fff; }
-.week-day.skipped { background: var(--muted); border-color: var(--muted); color: #fff; }
+.week-day.skipped {
+  background: var(--skipped);
+  border-color: var(--skipped);
+  color: #fff;
+}
 .week-day.selected { box-shadow: inset 0 0 0 2px var(--amber); }
 .week-day-name { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .week-day-number { font-family: var(--display); font-size: 16px; font-weight: 600; line-height: 1; }
