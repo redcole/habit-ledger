@@ -828,11 +828,14 @@ button {
 .week-day-name { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .week-day-number { font-family: var(--display); font-size: 16px; font-weight: 600; line-height: 1; }
 .week-day-status {
+  display: none;
   min-height: 12px;
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
 }
+
+.week-day.has-status .week-day-status { display: block; }
 
 .history-panel {
   border-top: 1px solid var(--border);

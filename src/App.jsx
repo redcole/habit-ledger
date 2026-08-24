@@ -204,9 +204,9 @@ function WeekOverview({ completions, selectedDate, onSelectDate }) {
             <button
               key={dateStr}
               type="button"
-              className={`week-day ${done ? 'done' : ''} ${skipped ? 'skipped' : ''} ${isToday ? 'today' : ''} ${
-                isSelected ? 'selected' : ''
-              }`}
+              className={`week-day ${done ? 'done has-status' : ''} ${skipped ? 'skipped has-status' : ''} ${
+                isToday ? 'today' : ''
+              } ${isSelected ? 'selected' : ''}`}
               onClick={() => onSelectDate(dateStr)}
               title={label}
               aria-label={label}
