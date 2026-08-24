@@ -65,28 +65,30 @@ function currentStreak(completions, today) {
   let cursor = today
   // if today isn't marked yet, start counting from yesterday so an
   // unbroken streak doesn't visually reset to 0 before the day ends
-  if (!isDone(completions[cursor])) {
+  if (!isDone(completions[cursor]) && !isSkipped(completions[cursor])) {
     cursor = addDays(cursor, -1)
   }
-  while (isDone(completions[cursor])) {
-    streak += 1
+  // Skipped days bridge a streak without adding to its completed-day count.
+  while (isDone(completions[cursor]) || isSkipped(completions[cursor])) {
+    if (isDone(completions[cursor])) streak += 1
     cursor = addDays(cursor, -1)
   }
   return streak
 }
 
 function bestStreak(completions) {
-  const dates = Object.keys(completions).filter((d) => isDone(completions[d])).sort()
+  const dates = Object.keys(completions)
+    .filter((d) => isDone(completions[d]) || isSkipped(completions[d]))
+    .sort()
   if (dates.length === 0) return 0
-  let best = 1
-  let run = 1
-  for (let i = 1; i < dates.length; i++) {
-    if (addDays(dates[i - 1], 1) === dates[i]) {
-      run += 1
-    } else {
-      run = 1
-    }
+  let best = 0
+  let run = 0
+  let previousDate = null
+  for (const date of dates) {
+    if (previousDate && addDays(previousDate, 1) !== date) run = 0
+    if (isDone(completions[date])) run += 1
     if (run > best) best = run
+    previousDate = date
   }
   return best
 }
