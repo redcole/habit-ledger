@@ -10,6 +10,7 @@ create table if not exists public.habits (
   name text not null,
   completions jsonb not null default '{}'::jsonb,
   position integer,
+  is_public boolean not null default true,
   created_at timestamptz not null default now()
 );
 
@@ -20,6 +21,12 @@ alter table public.habits enable row level security;
 create policy "Users can view their own habits"
   on public.habits for select
   using (auth.uid() = user_id);
+
+-- Anyone (including signed-out visitors) can see a habit flagged public —
+-- this is what powers /u/<username> profile pages.
+create policy "Public habits are viewable by anyone"
+  on public.habits for select
+  using (is_public = true);
 
 create policy "Users can insert their own habits"
   on public.habits for insert
@@ -38,7 +45,9 @@ create policy "Users can delete their own habits"
 create table if not exists public.profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   full_name text,
-  updated_at timestamptz not null default now()
+  username text unique,
+  updated_at timestamptz not null default now(),
+  constraint profiles_username_format check (username is null or username ~ '^[a-z0-9-]{3,24}$')
 );
 
 alter table public.profiles enable row level security;
@@ -46,6 +55,12 @@ alter table public.profiles enable row level security;
 create policy "Users can view their own profile"
   on public.profiles for select
   using (auth.uid() = user_id);
+
+-- A profile becomes publicly visible once its owner claims a username —
+-- that's the actual "opt in to being discoverable" moment.
+create policy "Public profiles are viewable by anyone"
+  on public.profiles for select
+  using (username is not null);
 
 create policy "Users can insert their own profile"
   on public.profiles for insert

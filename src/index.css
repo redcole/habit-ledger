@@ -418,6 +418,31 @@ button {
   cursor: not-allowed;
 }
 
+.settings-profile-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-link-btn {
+  border: 1px solid var(--border);
+  background: var(--panel-raised);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 9px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.settings-link-btn:hover {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
 .settings-hint {
   font-size: 11px;
   color: var(--ink-dim);
@@ -762,6 +787,26 @@ button {
   color: var(--amber);
 }
 
+.visibility-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 6px;
+  line-height: 1;
+  border-radius: 3px;
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
+}
+
+.visibility-btn:hover {
+  opacity: 1;
+}
+
+.visibility-btn.private {
+  opacity: 0.55;
+}
+
 /* ---------- Tally marks (signature element) ---------- */
 
 .tally {
@@ -836,6 +881,10 @@ button {
   outline: 2px solid var(--amber);
   outline-offset: 1px;
   transform: scale(1.15);
+}
+
+.heatmap-readonly .cell {
+  cursor: default;
 }
 
 .cell.future {

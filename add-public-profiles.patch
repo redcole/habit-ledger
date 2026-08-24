@@ -1,0 +1,662 @@
+From 4980ab99ea513185b970e12e1aa76cf4d5b62f42 Mon Sep 17 00:00:00 2001
+From: dev <dev@local>
+Date: Mon, 24 Aug 2026 05:28:38 +0000
+Subject: [PATCH] Add public profile pages (/u/username) with per-habit
+ public/private toggle
+
+---
+ src/App.jsx                                | 223 ++++++++++++++++++++-
+ src/Settings.jsx                           |  87 +++++++-
+ src/index.css                              |  49 +++++
+ supabase-migration-008-public-profiles.sql |  32 +++
+ supabase-schema.sql                        |  17 +-
+ vercel.json                                |   3 +
+ 6 files changed, 405 insertions(+), 6 deletions(-)
+ create mode 100644 supabase-migration-008-public-profiles.sql
+ create mode 100644 vercel.json
+
+diff --git a/src/App.jsx b/src/App.jsx
+index 0cad6d2..06797fc 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -39,6 +39,11 @@ function formatHeaderDate() {
+   })
+ }
+ 
++function parseRoute(pathname) {
++  const match = pathname.match(/^\/u\/([a-z0-9-]+)\/?$/i)
++  return match ? { name: 'profile', username: match[1].toLowerCase() } : { name: 'app' }
++}
++
+ function formatShortDate(dateStr) {
+   const [y, m, d] = dateStr.split('-').map(Number)
+   const dt = new Date(y, m - 1, d)
+@@ -188,6 +193,7 @@ function HabitRow({
+   habit,
+   onToggleDate,
+   onToggleSkip,
++  onTogglePublic,
+   onDelete,
+   onRename,
+   onDragStart,
+@@ -205,6 +211,7 @@ function HabitRow({
+   const activeSkipped = isSkipped(activeStatus)
+   const streak = useMemo(() => currentStreak(habit.completions, today), [habit.completions, today])
+   const best = useMemo(() => bestStreak(habit.completions), [habit.completions])
++  const isPublicHabit = habit.isPublic !== false
+ 
+   const [isEditing, setIsEditing] = useState(false)
+   const [draftName, setDraftName] = useState(habit.name)
+@@ -340,6 +347,18 @@ function HabitRow({
+               >
+                 {expanded ? '⤡' : '⤢'}
+               </button>
++              <button
++                className={`visibility-btn ${isPublicHabit ? '' : 'private'}`}
++                onClick={() => onTogglePublic(habit.id)}
++                aria-label={isPublicHabit ? 'Make this habit private' : 'Make this habit public'}
++                title={
++                  isPublicHabit
++                    ? 'Public — shows on your profile. Click to make private.'
++                    : 'Private — hidden from your profile. Click to make public.'
++                }
++              >
++                {isPublicHabit ? '🌐' : '🔒'}
++              </button>
+               <button className="edit-btn" onClick={startEditing} aria-label="Rename habit" title="Rename">
+                 ✎
+               </button>
+@@ -357,6 +376,131 @@ function HabitRow({
+ 
+ // ---------- add form ----------
+ 
++// ---------- public profile page ----------
++
++function PublicProfile({ username, onBack }) {
++  const [status, setStatus] = useState('loading') // 'loading' | 'not-found' | 'ready'
++  const [profile, setProfile] = useState(null)
++  const [habits, setHabits] = useState([])
++
++  useEffect(() => {
++    if (!supabase) {
++      setStatus('not-found')
++      return
++    }
++    let cancelled = false
++    setStatus('loading')
++
++    async function load() {
++      const { data: profileRow } = await supabase
++        .from('profiles')
++        .select('user_id, full_name, username')
++        .eq('username', username)
++        .maybeSingle()
++
++      if (cancelled) return
++      if (!profileRow) {
++        setStatus('not-found')
++        return
++      }
++
++      const { data: habitRows } = await supabase
++        .from('habits')
++        .select('id, name, completions, position, created_at')
++        .eq('user_id', profileRow.user_id)
++        .eq('is_public', true)
++        .order('position', { ascending: true, nullsFirst: false })
++        .order('created_at', { ascending: true })
++
++      if (cancelled) return
++      setProfile(profileRow)
++      setHabits(
++        (habitRows || []).map((row) => ({
++          id: row.id,
++          name: row.name,
++          completions: row.completions || {},
++        }))
++      )
++      setStatus('ready')
++    }
++
++    load()
++    return () => {
++      cancelled = true
++    }
++  }, [username])
++
++  return (
++    <div className="app">
++      <div className="header">
++        <h1>Habit Ledger</h1>
++        <div className="header-right">
++          <button className="account-link-btn" onClick={onBack}>
++            ← back to the app
++          </button>
++        </div>
++      </div>
++
++      {status === 'loading' && (
++        <div className="empty">
++          <strong>Loading profile…</strong>
++        </div>
++      )}
++
++      {status === 'not-found' && (
++        <div className="empty">
++          <strong>No profile found for @{username}.</strong>
++          They may not have claimed this username, or don't exist.
++        </div>
++      )}
++
++      {status === 'ready' && (
++        <>
++          <p className="subhead">
++            @{profile.username}
++            {profile.full_name ? ` — ${profile.full_name}` : ''}
++          </p>
++          <hr className="rule" />
++
++          {habits.length === 0 ? (
++            <div className="empty">
++              <strong>No public habits yet.</strong>
++              Check back later — they may still be warming up.
++            </div>
++          ) : (
++            <div className="rows">
++              {habits.map((h) => {
++                const streak = currentStreak(h.completions, todayStr())
++                const best = bestStreak(h.completions)
++                return (
++                  <div className="row" key={h.id}>
++                    <div className="row-top">
++                      <div className="row-heading-group">
++                        <div className="row-heading">
++                          <p className="row-name">{h.name}</p>
++                          <div className="row-meta">
++                            <TallyMarks count={streak} />
++                            <span className="best">best {best}</span>
++                          </div>
++                        </div>
++                      </div>
++                    </div>
++                    <div className="heatmap-readonly">
++                      <Heatmap completions={h.completions} selectedDate={null} onSelectDate={() => {}} />
++                    </div>
++                  </div>
++                )
++              })}
++            </div>
++          )}
++        </>
++      )}
++
++      <div className="footer">habit ledger · public profile</div>
++    </div>
++  )
++}
++
+ function AddHabitForm({ onAdd }) {
+   const [value, setValue] = useState('')
+ 
+@@ -389,6 +533,23 @@ function AddHabitForm({ onAdd }) {
+ export default function App() {
+   const configured = !!supabase
+ 
++  // ---------- routing (just enough for /u/<username> public profiles) ----------
++
++  const [route, setRoute] = useState(() => parseRoute(window.location.pathname))
++
++  useEffect(() => {
++    function handlePopState() {
++      setRoute(parseRoute(window.location.pathname))
++    }
++    window.addEventListener('popstate', handlePopState)
++    return () => window.removeEventListener('popstate', handlePopState)
++  }, [])
++
++  function navigateTo(path) {
++    window.history.pushState({}, '', path)
++    setRoute(parseRoute(path))
++  }
++
+   // ---------- auth state ----------
+ 
+   const [session, setSession] = useState(null)
+@@ -418,7 +579,7 @@ export default function App() {
+     let cancelled = false
+     supabase
+       .from('profiles')
+-      .select('full_name')
++      .select('full_name, username')
+       .eq('user_id', session.user.id)
+       .maybeSingle()
+       .then(({ data }) => {
+@@ -439,7 +600,7 @@ export default function App() {
+         { user_id: session.user.id, full_name: trimmed, updated_at: new Date().toISOString() },
+         { onConflict: 'user_id' }
+       )
+-      .select('full_name')
++      .select('full_name, username')
+       .single()
+     if (error) {
+       console.error('Failed to save display name:', error)
+@@ -449,6 +610,29 @@ export default function App() {
+     return { error }
+   }
+ 
++  async function updateUsername(name) {
++    if (!session) return { error: 'not signed in' }
++    const trimmed = name.trim().toLowerCase()
++    if (!/^[a-z0-9-]{3,24}$/.test(trimmed)) {
++      return { error: '3-24 characters: lowercase letters, numbers, and hyphens only' }
++    }
++    const { data, error } = await supabase
++      .from('profiles')
++      .upsert(
++        { user_id: session.user.id, username: trimmed, updated_at: new Date().toISOString() },
++        { onConflict: 'user_id' }
++      )
++      .select('full_name, username')
++      .single()
++    if (error) {
++      console.error('Failed to save username:', error)
++      const friendly = error.code === '23505' ? 'That username is already taken.' : error.message
++      return { error: friendly }
++    }
++    if (data) setProfile(data)
++    return { error: null }
++  }
++
+   // ---------- habit state (local guest storage OR remote account storage) ----------
+ 
+   const [habits, setHabits] = useState(() => {
+@@ -509,6 +693,7 @@ export default function App() {
+         name: row.name,
+         createdAt: row.created_at,
+         completions: row.completions || {},
++        isPublic: row.is_public !== false,
+       }))
+       setHabits(loaded)
+ 
+@@ -557,6 +742,7 @@ export default function App() {
+           name: row.name,
+           createdAt: row.created_at,
+           completions: row.completions || {},
++          isPublic: row.is_public !== false,
+         })),
+       ])
+       localStorage.removeItem(STORAGE_KEY)
+@@ -615,7 +801,13 @@ export default function App() {
+       if (!error && data) {
+         setHabits((prev) => [
+           ...prev,
+-          { id: data.id, name: data.name, createdAt: data.created_at, completions: data.completions || {} },
++          {
++            id: data.id,
++            name: data.name,
++            createdAt: data.created_at,
++            completions: data.completions || {},
++            isPublic: data.is_public !== false,
++          },
+         ])
+       }
+       return
+@@ -627,10 +819,21 @@ export default function App() {
+         name,
+         createdAt: todayStr(),
+         completions: {},
++        isPublic: true,
+       },
+     ])
+   }
+ 
++  async function togglePublic(id) {
++    const habit = habits.find((h) => h.id === id)
++    if (!habit) return
++    const isPublic = !habit.isPublic
++    setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, isPublic } : h)))
++    if (session) {
++      await supabase.from('habits').update({ is_public: isPublic }).eq('id', id)
++    }
++  }
++
+   async function toggleDate(id, dateStr) {
+     const habit = habits.find((h) => h.id === id)
+     if (!habit) return
+@@ -720,6 +923,10 @@ export default function App() {
+     }
+   }
+ 
++  if (route.name === 'profile') {
++    return <PublicProfile username={route.username} onBack={() => navigateTo('/')} />
++  }
++
+   return (
+     <div className="app">
+       <div className="header">
+@@ -735,6 +942,9 @@ export default function App() {
+             configured={configured}
+             displayName={profile?.full_name || ''}
+             onSaveName={updateDisplayName}
++            username={profile?.username || ''}
++            onSaveUsername={updateUsername}
++            onViewProfile={(u) => navigateTo(`/u/${u}`)}
+           />
+         </div>
+       </div>
+@@ -777,6 +987,7 @@ export default function App() {
+               habit={h}
+               onToggleDate={toggleDate}
+               onToggleSkip={toggleSkip}
++              onTogglePublic={togglePublic}
+               onDelete={deleteHabit}
+               onRename={renameHabit}
+               onDragStart={handleDragStart}
+@@ -796,7 +1007,11 @@ export default function App() {
+           : `entries saved to this browser only · ${habits.length} habit${habits.length === 1 ? '' : 's'} tracked`}
+       </div>
+ 
+-      <ChatWidget session={session} configured={configured} />
++      <ChatWidget
++        session={session}
++        configured={configured}
++        displayName={profile?.full_name || session?.user.email}
++      />
+     </div>
+   )
+ }
+diff --git a/src/Settings.jsx b/src/Settings.jsx
+index c89a712..94a5fbe 100644
+--- a/src/Settings.jsx
++++ b/src/Settings.jsx
+@@ -1,6 +1,16 @@
+ import { useEffect, useRef, useState } from 'react'
+ 
+-export default function Settings({ theme, onToggleTheme, session, configured, displayName, onSaveName }) {
++export default function Settings({
++  theme,
++  onToggleTheme,
++  session,
++  configured,
++  displayName,
++  onSaveName,
++  username,
++  onSaveUsername,
++  onViewProfile,
++}) {
+   const [open, setOpen] = useState(false)
+   const [draftName, setDraftName] = useState(displayName || '')
+   const [saving, setSaving] = useState(false)
+@@ -8,10 +18,20 @@ export default function Settings({ theme, onToggleTheme, session, configured, di
+   const [nameError, setNameError] = useState('')
+   const wrapperRef = useRef(null)
+ 
++  const [draftUsername, setDraftUsername] = useState(username || '')
++  const [savingUsername, setSavingUsername] = useState(false)
++  const [savedUsername, setSavedUsername] = useState(false)
++  const [usernameError, setUsernameError] = useState('')
++  const [copied, setCopied] = useState(false)
++
+   useEffect(() => {
+     setDraftName(displayName || '')
+   }, [displayName])
+ 
++  useEffect(() => {
++    setDraftUsername(username || '')
++  }, [username])
++
+   useEffect(() => {
+     if (!open) return
+     function handleClickOutside(e) {
+@@ -54,6 +74,38 @@ export default function Settings({ theme, onToggleTheme, session, configured, di
+     }
+   }
+ 
++  async function handleSaveUsername(e) {
++    e.preventDefault()
++    const trimmed = draftUsername.trim()
++    if (!trimmed) return
++    setSavingUsername(true)
++    setSavedUsername(false)
++    setUsernameError('')
++    try {
++      const { error } = await onSaveUsername(trimmed)
++      if (error) {
++        console.error('Failed to save username:', error)
++        setUsernameError(typeof error === 'string' ? error : error.message || 'Could not save your username.')
++      } else {
++        setSavedUsername(true)
++        setTimeout(() => setSavedUsername(false), 1500)
++      }
++    } catch (err) {
++      console.error('Failed to save username:', err)
++      setUsernameError(err.message || 'Could not save your username.')
++    } finally {
++      setSavingUsername(false)
++    }
++  }
++
++  function handleCopyLink() {
++    const url = `${window.location.origin}/u/${username}`
++    navigator.clipboard?.writeText(url).then(() => {
++      setCopied(true)
++      setTimeout(() => setCopied(false), 1500)
++    })
++  }
++
+   return (
+     <div className="settings-widget" ref={wrapperRef}>
+       <button
+@@ -101,6 +153,39 @@ export default function Settings({ theme, onToggleTheme, session, configured, di
+             </div>
+           )}
+ 
++          {configured && session && (
++            <div className="settings-section">
++              <span className="settings-label">Public profile</span>
++              <form className="settings-name-form" onSubmit={handleSaveUsername}>
++                <input
++                  type="text"
++                  value={draftUsername}
++                  onChange={(e) => setDraftUsername(e.target.value.toLowerCase())}
++                  maxLength={24}
++                  placeholder="username"
++                />
++                <button type="submit" disabled={savingUsername || !draftUsername.trim()}>
++                  {savingUsername ? '...' : savedUsername ? 'saved' : 'save'}
++                </button>
++              </form>
++              {username ? (
++                <div className="settings-profile-link">
++                  <button className="settings-link-btn" onClick={() => onViewProfile(username)}>
++                    /u/{username}
++                  </button>
++                  <button className="settings-link-btn" onClick={handleCopyLink}>
++                    {copied ? 'copied' : 'copy link'}
++                  </button>
++                </div>
++              ) : (
++                <span className="settings-hint">
++                  Claim a username to get a public page showing your public habits and streaks.
++                </span>
++              )}
++              {usernameError && <p className="settings-error">{usernameError}</p>}
++            </div>
++          )}
++
+           {configured && !session && (
+             <div className="settings-section">
+               <span className="settings-label">Display name</span>
+diff --git a/src/index.css b/src/index.css
+index b53b137..96fb81f 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -418,6 +418,31 @@ button {
+   cursor: not-allowed;
+ }
+ 
++.settings-profile-link {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  flex-wrap: wrap;
++}
++
++.settings-link-btn {
++  border: 1px solid var(--border);
++  background: var(--panel-raised);
++  color: var(--ink);
++  font-family: var(--body);
++  font-size: 11px;
++  font-weight: 600;
++  padding: 5px 9px;
++  border-radius: 4px;
++  cursor: pointer;
++  transition: border-color 0.15s ease, color 0.15s ease;
++}
++
++.settings-link-btn:hover {
++  border-color: var(--amber);
++  color: var(--amber);
++}
++
+ .settings-hint {
+   font-size: 11px;
+   color: var(--ink-dim);
+@@ -762,6 +787,26 @@ button {
+   color: var(--amber);
+ }
+ 
++.visibility-btn {
++  border: none;
++  background: transparent;
++  cursor: pointer;
++  font-size: 13px;
++  padding: 6px;
++  line-height: 1;
++  border-radius: 3px;
++  opacity: 0.85;
++  transition: opacity 0.15s ease;
++}
++
++.visibility-btn:hover {
++  opacity: 1;
++}
++
++.visibility-btn.private {
++  opacity: 0.55;
++}
++
+ /* ---------- Tally marks (signature element) ---------- */
+ 
+ .tally {
+@@ -838,6 +883,10 @@ button {
+   transform: scale(1.15);
+ }
+ 
++.heatmap-readonly .cell {
++  cursor: default;
++}
++
+ .cell.future {
+   background: transparent;
+ }
+diff --git a/supabase-migration-008-public-profiles.sql b/supabase-migration-008-public-profiles.sql
+new file mode 100644
+index 0000000..e4812f0
+--- /dev/null
++++ b/supabase-migration-008-public-profiles.sql
+@@ -0,0 +1,32 @@
++-- Run this once to support public profile pages. Each habit gets an
++-- is_public flag (public by default, opt out per habit), and each account
++-- can claim a username to get a shareable profile at /u/<username>.
++
++alter table public.habits
++  add column if not exists is_public boolean not null default true;
++
++alter table public.profiles
++  add column if not exists username text unique;
++
++-- Keep usernames sane: lowercase letters, numbers, hyphens, 3-24 chars.
++-- The app also validates this client-side before saving, but the
++-- constraint is enforced here too so it can't be bypassed by calling the
++-- API directly.
++alter table public.profiles
++  add constraint profiles_username_format
++  check (username is null or username ~ '^[a-z0-9-]{3,24}$');
++
++-- A profile only becomes publicly visible once its owner sets a username
++-- — that's the actual "opt in to being discoverable" moment. Habits are
++-- public-by-default underneath that, but nobody can reach them without a
++-- username to look up in the first place.
++create policy "Public profiles are viewable by anyone"
++  on public.profiles for select
++  using (username is not null);
++
++-- Anyone (including signed-out visitors) can see a habit that's flagged
++-- public. Combined with the policy above, this is what powers /u/<username>
++-- profile pages.
++create policy "Public habits are viewable by anyone"
++  on public.habits for select
++  using (is_public = true);
+diff --git a/supabase-schema.sql b/supabase-schema.sql
+index dbb3018..18655b7 100644
+--- a/supabase-schema.sql
++++ b/supabase-schema.sql
+@@ -10,6 +10,7 @@ create table if not exists public.habits (
+   name text not null,
+   completions jsonb not null default '{}'::jsonb,
+   position integer,
++  is_public boolean not null default true,
+   created_at timestamptz not null default now()
+ );
+ 
+@@ -21,6 +22,12 @@ create policy "Users can view their own habits"
+   on public.habits for select
+   using (auth.uid() = user_id);
+ 
++-- Anyone (including signed-out visitors) can see a habit flagged public —
++-- this is what powers /u/<username> profile pages.
++create policy "Public habits are viewable by anyone"
++  on public.habits for select
++  using (is_public = true);
++
+ create policy "Users can insert their own habits"
+   on public.habits for insert
+   with check (auth.uid() = user_id);
+@@ -38,7 +45,9 @@ create policy "Users can delete their own habits"
+ create table if not exists public.profiles (
+   user_id uuid primary key references auth.users(id) on delete cascade,
+   full_name text,
+-  updated_at timestamptz not null default now()
++  username text unique,
++  updated_at timestamptz not null default now(),
++  constraint profiles_username_format check (username is null or username ~ '^[a-z0-9-]{3,24}$')
+ );
+ 
+ alter table public.profiles enable row level security;
+@@ -47,6 +56,12 @@ create policy "Users can view their own profile"
+   on public.profiles for select
+   using (auth.uid() = user_id);
+ 
++-- A profile becomes publicly visible once its owner claims a username —
++-- that's the actual "opt in to being discoverable" moment.
++create policy "Public profiles are viewable by anyone"
++  on public.profiles for select
++  using (username is not null);
++
+ create policy "Users can insert their own profile"
+   on public.profiles for insert
+   with check (auth.uid() = user_id);
+diff --git a/vercel.json b/vercel.json
+new file mode 100644
+index 0000000..0f32683
+--- /dev/null
++++ b/vercel.json
+@@ -0,0 +1,3 @@
++{
++  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
++}
+-- 
+2.43.0
+

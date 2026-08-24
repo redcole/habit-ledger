@@ -39,6 +39,11 @@ function formatHeaderDate() {
   })
 }
 
+function parseRoute(pathname) {
+  const match = pathname.match(/^\/u\/([a-z0-9-]+)\/?$/i)
+  return match ? { name: 'profile', username: match[1].toLowerCase() } : { name: 'app' }
+}
+
 function formatShortDate(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number)
   const dt = new Date(y, m - 1, d)
@@ -188,6 +193,7 @@ function HabitRow({
   habit,
   onToggleDate,
   onToggleSkip,
+  onTogglePublic,
   onDelete,
   onRename,
   onDragStart,
@@ -205,6 +211,7 @@ function HabitRow({
   const activeSkipped = isSkipped(activeStatus)
   const streak = useMemo(() => currentStreak(habit.completions, today), [habit.completions, today])
   const best = useMemo(() => bestStreak(habit.completions), [habit.completions])
+  const isPublicHabit = habit.isPublic !== false
 
   const [isEditing, setIsEditing] = useState(false)
   const [draftName, setDraftName] = useState(habit.name)
@@ -340,6 +347,18 @@ function HabitRow({
               >
                 {expanded ? '⤡' : '⤢'}
               </button>
+              <button
+                className={`visibility-btn ${isPublicHabit ? '' : 'private'}`}
+                onClick={() => onTogglePublic(habit.id)}
+                aria-label={isPublicHabit ? 'Make this habit private' : 'Make this habit public'}
+                title={
+                  isPublicHabit
+                    ? 'Public — shows on your profile. Click to make private.'
+                    : 'Private — hidden from your profile. Click to make public.'
+                }
+              >
+                {isPublicHabit ? '🌐' : '🔒'}
+              </button>
               <button className="edit-btn" onClick={startEditing} aria-label="Rename habit" title="Rename">
                 ✎
               </button>
@@ -356,6 +375,131 @@ function HabitRow({
 }
 
 // ---------- add form ----------
+
+// ---------- public profile page ----------
+
+function PublicProfile({ username, onBack }) {
+  const [status, setStatus] = useState('loading') // 'loading' | 'not-found' | 'ready'
+  const [profile, setProfile] = useState(null)
+  const [habits, setHabits] = useState([])
+
+  useEffect(() => {
+    if (!supabase) {
+      setStatus('not-found')
+      return
+    }
+    let cancelled = false
+    setStatus('loading')
+
+    async function load() {
+      const { data: profileRow } = await supabase
+        .from('profiles')
+        .select('user_id, full_name, username')
+        .eq('username', username)
+        .maybeSingle()
+
+      if (cancelled) return
+      if (!profileRow) {
+        setStatus('not-found')
+        return
+      }
+
+      const { data: habitRows } = await supabase
+        .from('habits')
+        .select('id, name, completions, position, created_at')
+        .eq('user_id', profileRow.user_id)
+        .eq('is_public', true)
+        .order('position', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: true })
+
+      if (cancelled) return
+      setProfile(profileRow)
+      setHabits(
+        (habitRows || []).map((row) => ({
+          id: row.id,
+          name: row.name,
+          completions: row.completions || {},
+        }))
+      )
+      setStatus('ready')
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [username])
+
+  return (
+    <div className="app">
+      <div className="header">
+        <h1>Habit Ledger</h1>
+        <div className="header-right">
+          <button className="account-link-btn" onClick={onBack}>
+            ← back to the app
+          </button>
+        </div>
+      </div>
+
+      {status === 'loading' && (
+        <div className="empty">
+          <strong>Loading profile…</strong>
+        </div>
+      )}
+
+      {status === 'not-found' && (
+        <div className="empty">
+          <strong>No profile found for @{username}.</strong>
+          They may not have claimed this username, or don't exist.
+        </div>
+      )}
+
+      {status === 'ready' && (
+        <>
+          <p className="subhead">
+            @{profile.username}
+            {profile.full_name ? ` — ${profile.full_name}` : ''}
+          </p>
+          <hr className="rule" />
+
+          {habits.length === 0 ? (
+            <div className="empty">
+              <strong>No public habits yet.</strong>
+              Check back later — they may still be warming up.
+            </div>
+          ) : (
+            <div className="rows">
+              {habits.map((h) => {
+                const streak = currentStreak(h.completions, todayStr())
+                const best = bestStreak(h.completions)
+                return (
+                  <div className="row" key={h.id}>
+                    <div className="row-top">
+                      <div className="row-heading-group">
+                        <div className="row-heading">
+                          <p className="row-name">{h.name}</p>
+                          <div className="row-meta">
+                            <TallyMarks count={streak} />
+                            <span className="best">best {best}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="heatmap-readonly">
+                      <Heatmap completions={h.completions} selectedDate={null} onSelectDate={() => {}} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="footer">habit ledger · public profile</div>
+    </div>
+  )
+}
 
 function AddHabitForm({ onAdd }) {
   const [value, setValue] = useState('')
@@ -389,6 +533,23 @@ function AddHabitForm({ onAdd }) {
 export default function App() {
   const configured = !!supabase
 
+  // ---------- routing (just enough for /u/<username> public profiles) ----------
+
+  const [route, setRoute] = useState(() => parseRoute(window.location.pathname))
+
+  useEffect(() => {
+    function handlePopState() {
+      setRoute(parseRoute(window.location.pathname))
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  function navigateTo(path) {
+    window.history.pushState({}, '', path)
+    setRoute(parseRoute(path))
+  }
+
   // ---------- auth state ----------
 
   const [session, setSession] = useState(null)
@@ -418,7 +579,7 @@ export default function App() {
     let cancelled = false
     supabase
       .from('profiles')
-      .select('full_name')
+      .select('full_name, username')
       .eq('user_id', session.user.id)
       .maybeSingle()
       .then(({ data }) => {
@@ -439,7 +600,7 @@ export default function App() {
         { user_id: session.user.id, full_name: trimmed, updated_at: new Date().toISOString() },
         { onConflict: 'user_id' }
       )
-      .select('full_name')
+      .select('full_name, username')
       .single()
     if (error) {
       console.error('Failed to save display name:', error)
@@ -447,6 +608,29 @@ export default function App() {
       setProfile(data)
     }
     return { error }
+  }
+
+  async function updateUsername(name) {
+    if (!session) return { error: 'not signed in' }
+    const trimmed = name.trim().toLowerCase()
+    if (!/^[a-z0-9-]{3,24}$/.test(trimmed)) {
+      return { error: '3-24 characters: lowercase letters, numbers, and hyphens only' }
+    }
+    const { data, error } = await supabase
+      .from('profiles')
+      .upsert(
+        { user_id: session.user.id, username: trimmed, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      )
+      .select('full_name, username')
+      .single()
+    if (error) {
+      console.error('Failed to save username:', error)
+      const friendly = error.code === '23505' ? 'That username is already taken.' : error.message
+      return { error: friendly }
+    }
+    if (data) setProfile(data)
+    return { error: null }
   }
 
   // ---------- habit state (local guest storage OR remote account storage) ----------
@@ -509,6 +693,7 @@ export default function App() {
         name: row.name,
         createdAt: row.created_at,
         completions: row.completions || {},
+        isPublic: row.is_public !== false,
       }))
       setHabits(loaded)
 
@@ -557,6 +742,7 @@ export default function App() {
           name: row.name,
           createdAt: row.created_at,
           completions: row.completions || {},
+          isPublic: row.is_public !== false,
         })),
       ])
       localStorage.removeItem(STORAGE_KEY)
@@ -615,7 +801,13 @@ export default function App() {
       if (!error && data) {
         setHabits((prev) => [
           ...prev,
-          { id: data.id, name: data.name, createdAt: data.created_at, completions: data.completions || {} },
+          {
+            id: data.id,
+            name: data.name,
+            createdAt: data.created_at,
+            completions: data.completions || {},
+            isPublic: data.is_public !== false,
+          },
         ])
       }
       return
@@ -627,8 +819,19 @@ export default function App() {
         name,
         createdAt: todayStr(),
         completions: {},
+        isPublic: true,
       },
     ])
+  }
+
+  async function togglePublic(id) {
+    const habit = habits.find((h) => h.id === id)
+    if (!habit) return
+    const isPublic = !habit.isPublic
+    setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, isPublic } : h)))
+    if (session) {
+      await supabase.from('habits').update({ is_public: isPublic }).eq('id', id)
+    }
   }
 
   async function toggleDate(id, dateStr) {
@@ -720,6 +923,10 @@ export default function App() {
     }
   }
 
+  if (route.name === 'profile') {
+    return <PublicProfile username={route.username} onBack={() => navigateTo('/')} />
+  }
+
   return (
     <div className="app">
       <div className="header">
@@ -735,6 +942,9 @@ export default function App() {
             configured={configured}
             displayName={profile?.full_name || ''}
             onSaveName={updateDisplayName}
+            username={profile?.username || ''}
+            onSaveUsername={updateUsername}
+            onViewProfile={(u) => navigateTo(`/u/${u}`)}
           />
         </div>
       </div>
@@ -777,6 +987,7 @@ export default function App() {
               habit={h}
               onToggleDate={toggleDate}
               onToggleSkip={toggleSkip}
+              onTogglePublic={togglePublic}
               onDelete={deleteHabit}
               onRename={renameHabit}
               onDragStart={handleDragStart}
@@ -796,7 +1007,11 @@ export default function App() {
           : `entries saved to this browser only · ${habits.length} habit${habits.length === 1 ? '' : 's'} tracked`}
       </div>
 
-      <ChatWidget session={session} configured={configured} />
+      <ChatWidget
+        session={session}
+        configured={configured}
+        displayName={profile?.full_name || session?.user.email}
+      />
     </div>
   )
 }
