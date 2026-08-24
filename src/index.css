@@ -732,8 +732,9 @@ button {
 .row-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
-  flex-shrink: 0;
 }
 
 .selected-date-pill {
@@ -1397,4 +1398,21 @@ button {
   .week-days { gap: 4px; }
   .week-day { min-height: 54px; }
   .week-day-name { font-size: 9px; }
+}
+
+/* ---------- Wide screens: two-column habit list ---------- */
+
+@media (min-width: 900px) {
+  .app {
+    max-width: 1180px;
+  }
+  .rows {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 560px));
+    justify-content: center;
+    column-gap: 20px;
+  }
+  .row {
+    max-width: 560px;
+  }
 }
