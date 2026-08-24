@@ -45,6 +45,11 @@ function formatShortDate(dateStr) {
   return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
+function currentWeekDates() {
+  const today = todayStr()
+  return Array.from({ length: 7 }, (_, index) => addDays(today, index - 6))
+}
+
 // ---------- streak math ----------
 
 function isDone(status) {
@@ -143,7 +148,7 @@ function TallyMarks({ count }) {
 
 // ---------- heatmap strip ----------
 
-function Heatmap({ completions, selectedDate, onSelectDate }) {
+function Heatmap({ completions }) {
   const today = todayStr()
   const cells = []
   for (let i = HEATMAP_DAYS - 1; i >= 0; i--) {
@@ -154,30 +159,66 @@ function Heatmap({ completions, selectedDate, onSelectDate }) {
       filled: isDone(status),
       skipped: isSkipped(status),
       isToday: dateStr === today,
-      isSelected: dateStr === selectedDate,
     })
   }
   return (
     <div className="heatmap" aria-label="Habit history">
       {cells.map((c) => {
         const statusLabel = c.filled ? 'completed' : c.skipped ? 'skipped' : 'not completed'
-        const label = `${c.dateStr}: ${statusLabel}${c.isToday ? ' (today)' : ''}${
-          c.isSelected ? ' — selected' : ''
-        }`
+        const label = `${c.dateStr}: ${statusLabel}${c.isToday ? ' (today)' : ''}`
         return (
-          <button
+          <span
             key={c.dateStr}
-            type="button"
-            className={`cell ${c.filled ? 'filled' : ''} ${c.skipped ? 'skipped' : ''} ${
-              c.isToday ? 'today' : ''
-            } ${c.isSelected ? 'selected' : ''}`}
+            className={`cell ${c.filled ? 'filled' : ''} ${c.skipped ? 'skipped' : ''} ${c.isToday ? 'today' : ''}`}
             title={label}
             aria-label={label}
-            aria-pressed={c.isSelected}
-            onClick={() => onSelectDate(c.dateStr)}
           />
         )
       })}
+    </div>
+  )
+}
+
+function WeekOverview({ completions, selectedDate, onSelectDate }) {
+  const today = todayStr()
+  const week = currentWeekDates()
+
+  return (
+    <div className="week-overview" aria-label="This week">
+      <div className="week-overview-heading">
+        <span>Last 7 days</span>
+        <span className="week-overview-hint">tap a day to mark it done</span>
+      </div>
+      <div className="week-days">
+        {week.map((dateStr, index) => {
+          const status = completions[dateStr]
+          const done = isDone(status)
+          const skipped = isSkipped(status)
+          const isToday = dateStr === today
+          const isSelected = dateStr === selectedDate
+          const weekday = new Date(`${dateStr}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short' })
+          const label = `${weekday}, ${formatShortDate(dateStr)}: ${
+            done ? 'completed' : skipped ? 'skipped' : 'not completed'
+          }${isToday ? ' (today)' : ''}${isSelected ? ' (selected)' : ''}`
+          return (
+            <button
+              key={dateStr}
+              type="button"
+              className={`week-day ${done ? 'done' : ''} ${skipped ? 'skipped' : ''} ${isToday ? 'today' : ''} ${
+                isSelected ? 'selected' : ''
+              }`}
+              onClick={() => onSelectDate(dateStr)}
+              title={label}
+              aria-label={label}
+              aria-pressed={isSelected}
+            >
+              <span className="week-day-name">{weekday}</span>
+              <span className="week-day-number">{dateStr.slice(-2)}</span>
+              <span className="week-day-status" aria-hidden="true">{done ? '✓' : skipped ? '–' : ''}</span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -208,10 +249,10 @@ function HabitRow({
 
   const [isEditing, setIsEditing] = useState(false)
   const [draftName, setDraftName] = useState(habit.name)
-  const [expanded, setExpanded] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
 
   function handleSelectDate(dateStr) {
-    setSelectedDate((prev) => (prev === dateStr ? null : dateStr))
+    setSelectedDate((selected) => (selected === dateStr ? null : dateStr))
   }
 
   function startEditing() {
@@ -244,7 +285,7 @@ function HabitRow({
 
   return (
     <div
-      className={`row ${isDragging ? 'row-dragging' : ''} ${isDragOver ? 'row-drag-over' : ''} ${expanded ? 'row-expanded' : ''}`}
+      className={`row ${isDragging ? 'row-dragging' : ''} ${isDragOver ? 'row-drag-over' : ''}`}
       onDragOver={(e) => {
         e.preventDefault()
         onDragOver(habit.id)
@@ -307,19 +348,6 @@ function HabitRow({
             </>
           ) : (
             <>
-              {selectedDate && (
-                <span className="selected-date-pill">
-                  editing {formatShortDate(selectedDate)}
-                  <button
-                    className="clear-selection-btn"
-                    onClick={() => setSelectedDate(null)}
-                    aria-label="Stop editing this day, back to today"
-                    title="Back to today"
-                  >
-                    ✕
-                  </button>
-                </span>
-              )}
               <button
                 className={`mark-btn ${activeDone ? 'done' : ''}`}
                 onClick={() => onToggleDate(habit.id, activeDate)}
@@ -333,12 +361,11 @@ function HabitRow({
                 {activeSkipped ? '↺ unskip' : 'skip'}
               </button>
               <button
-                className={`expand-btn ${expanded ? 'expanded' : ''}`}
-                onClick={() => setExpanded((e) => !e)}
-                aria-label={expanded ? 'Collapse habit' : 'Enlarge habit'}
-                title={expanded ? 'Collapse' : 'Enlarge for easier tapping'}
+                className={`history-btn ${showHistory ? 'open' : ''}`}
+                onClick={() => setShowHistory((open) => !open)}
+                aria-expanded={showHistory}
               >
-                {expanded ? '⤡' : '⤢'}
+                {showHistory ? 'hide history' : 'history'}
               </button>
               <button className="edit-btn" onClick={startEditing} aria-label="Rename habit" title="Rename">
                 ✎
@@ -350,7 +377,21 @@ function HabitRow({
           )}
         </div>
       </div>
-      <Heatmap completions={habit.completions} selectedDate={selectedDate} onSelectDate={handleSelectDate} />
+      <WeekOverview
+        completions={habit.completions}
+        selectedDate={selectedDate}
+        onSelectDate={handleSelectDate}
+      />
+      {showHistory && (
+        <div className="history-panel">
+          <div className="history-heading">
+            <span>Last 10 weeks</span>
+            <span className="history-legend"><i className="legend-done" /> done <i className="legend-skipped" /> skipped</span>
+          </div>
+          <Heatmap completions={habit.completions} />
+          <p className="history-help">Use the controls above to edit a day.</p>
+        </div>
+      )}
     </div>
   )
 }
