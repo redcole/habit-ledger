@@ -1121,14 +1121,7 @@ button {
 /* ---------- Chat widget ---------- */
 
 .chat-widget {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 12px;
+  display: none;
 }
 
 .chat-toggle {
