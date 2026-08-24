@@ -389,7 +389,6 @@ function HabitRow({
             <span className="history-legend"><i className="legend-done" /> done <i className="legend-skipped" /> skipped</span>
           </div>
           <Heatmap completions={habit.completions} />
-          <p className="history-help">Use the controls above to edit a day.</p>
         </div>
       )}
     </div>
