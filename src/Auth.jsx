@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from './supabaseClient'
 
-export default function AuthPanel({ session, configured, displayName }) {
+export default function AuthPanel({ session, configured, displayName, variant = 'bar' }) {
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState('signin') // 'signin' | 'signup'
   const [fullName, setFullName] = useState('')
@@ -47,9 +47,13 @@ export default function AuthPanel({ session, configured, displayName }) {
     await supabase.auth.signOut()
   }
 
+  const wrapperClass =
+    variant === 'settings' ? 'settings-section settings-account' : 'account-bar'
+
   if (!configured) {
     return (
-      <div className="account-bar account-bar-disabled">
+      <div className={`${wrapperClass}${variant === 'bar' ? ' account-bar-disabled' : ''}`}>
+        {variant === 'settings' && <span className="settings-label">Account</span>}
         <span className="account-status">
           Account sync isn't set up yet — add Supabase credentials to enable sign-in (see README).
         </span>
@@ -59,7 +63,8 @@ export default function AuthPanel({ session, configured, displayName }) {
 
   if (session) {
     return (
-      <div className="account-bar">
+      <div className={wrapperClass}>
+        {variant === 'settings' && <span className="settings-label">Account</span>}
         <span className="account-status">
           <span className="account-dot" /> Signed in as{' '}
           <strong>{displayName || session.user.email}</strong>
@@ -72,7 +77,8 @@ export default function AuthPanel({ session, configured, displayName }) {
   }
 
   return (
-    <div className="account-bar">
+    <div className={wrapperClass}>
+      {variant === 'settings' && <span className="settings-label">Account</span>}
       {open ? (
         <form className="auth-form" onSubmit={handleSubmit}>
           {mode === 'signup' && (

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import AuthPanel from './Auth.jsx'
 
 const ACCENT_PRESETS = ['#96620e', '#b45309', '#a34a3a', '#4c7a48', '#2563a8', '#7c3aed']
 const SAGE_PRESETS = ['#4c7a48', '#3f6b3c', '#74ae69', '#2f7d68', '#3d73a8', '#687f42']
@@ -44,6 +45,7 @@ export default function Settings({
   onSageChange,
   session,
   configured,
+  authLoading,
   displayName,
   onSaveName,
 }) {
@@ -119,6 +121,10 @@ export default function Settings({
               ✕
             </button>
           </div>
+
+          {!authLoading && (
+            <AuthPanel session={session} configured={configured} displayName={displayName} variant="settings" />
+          )}
 
           <div className="settings-section">
             <span className="settings-label">Appearance</span>

@@ -352,6 +352,26 @@ button {
   border-top: 1px solid var(--border);
 }
 
+.settings-section.settings-account {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.settings-account .settings-label {
+  width: 100%;
+}
+
+.settings-account .account-status {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.settings-account .auth-form {
+  margin-top: 2px;
+}
+
 .settings-label {
   font-size: 11px;
   font-weight: 600;
@@ -646,6 +666,7 @@ button {
   flex-shrink: 0;
   user-select: none;
   margin-top: 2px;
+  touch-action: none;
 }
 
 .drag-handle:hover {
@@ -828,6 +849,113 @@ button {
 .history-btn.open {
   border-color: var(--amber);
   color: var(--amber);
+}
+
+.row-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.more-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--ink-dim);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 6px 9px;
+  border-radius: 3px;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.more-btn:hover,
+.more-btn.open {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.row-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 130px;
+  max-width: min(220px, calc(100vw - 40px));
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 30px rgba(35, 43, 37, 0.2);
+  z-index: 40;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.row-menu-item {
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 13px;
+  text-align: left;
+  padding: 9px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.row-menu-item:hover {
+  background: var(--panel-raised);
+}
+
+.row-menu-item-danger {
+  color: var(--rust);
+}
+
+.row-menu-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.row-menu-confirm-text {
+  font-size: 12px;
+  color: var(--ink);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.row-menu-confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.row-menu-confirm-btn {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: var(--panel-raised);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, filter 0.15s ease;
+}
+
+.row-menu-confirm-btn:hover {
+  border-color: var(--amber);
+}
+
+.row-menu-confirm-btn-danger {
+  border-color: var(--rust);
+  background: var(--rust);
+  color: #fff;
+}
+
+.row-menu-confirm-btn-danger:hover {
+  filter: brightness(1.1);
 }
 
 /* ---------- Tally marks (signature element) ---------- */
@@ -1252,6 +1380,11 @@ button {
   .row-actions {
     align-self: stretch;
     justify-content: space-between;
+  }
+  .drag-handle {
+    font-size: 18px;
+    padding: 8px 10px 8px 4px;
+    margin: -8px 0 -8px -4px;
   }
   .week-days { gap: 4px; }
   .week-day { min-height: 54px; }

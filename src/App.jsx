@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './supabaseClient'
-import AuthPanel from './Auth.jsx'
 import Settings from './Settings.jsx'
 import ImportBanner from './ImportBanner.jsx'
 import ChatWidget from './ChatWidget.jsx'
@@ -253,6 +252,88 @@ function HabitRow({
   const [isEditing, setIsEditing] = useState(false)
   const [draftName, setDraftName] = useState(habit.name)
   const [showHistory, setShowHistory] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const menuRef = useRef(null)
+  const handleRef = useRef(null)
+  const touchDraggingRef = useRef(false)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    function handleClickOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false)
+        setConfirmingDelete(false)
+      }
+    }
+    function handleEscape(e) {
+      if (e.key === 'Escape') {
+        setMenuOpen(false)
+        setConfirmingDelete(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [menuOpen])
+
+  // Touch-based drag-to-reorder. The native HTML5 drag-and-drop API used for
+  // mouse dragging (draggable / onDragStart / onDragOver / onDrop) never
+  // fires on touch devices, so dragging needs a separate touch implementation
+  // that drives the same onDragStart/onDragOver/onDrop/onDragEnd callbacks.
+  // Attached as real DOM listeners (not React's onTouch* props) so touchmove
+  // can call preventDefault and stop the page from scrolling mid-drag —
+  // React's synthetic touch handlers are passive and can't do that.
+  useEffect(() => {
+    const handle = handleRef.current
+    if (!handle) return
+
+    function targetIdAt(x, y) {
+      const el = document.elementFromPoint(x, y)
+      const rowEl = el && el.closest ? el.closest('[data-habit-id]') : null
+      return rowEl ? rowEl.getAttribute('data-habit-id') : null
+    }
+
+    function onTouchStart() {
+      touchDraggingRef.current = true
+      onDragStart(habit.id)
+    }
+
+    function onTouchMove(e) {
+      if (!touchDraggingRef.current) return
+      e.preventDefault()
+      const touch = e.touches[0]
+      const targetId = targetIdAt(touch.clientX, touch.clientY)
+      if (targetId) onDragOver(targetId)
+    }
+
+    function onTouchEnd(e) {
+      if (!touchDraggingRef.current) return
+      touchDraggingRef.current = false
+      const touch = e.changedTouches[0]
+      const targetId = targetIdAt(touch.clientX, touch.clientY)
+      if (targetId) {
+        onDrop(targetId)
+      } else {
+        onDragEnd()
+      }
+    }
+
+    handle.addEventListener('touchstart', onTouchStart, { passive: true })
+    handle.addEventListener('touchmove', onTouchMove, { passive: false })
+    handle.addEventListener('touchend', onTouchEnd, { passive: true })
+    handle.addEventListener('touchcancel', onTouchEnd, { passive: true })
+
+    return () => {
+      handle.removeEventListener('touchstart', onTouchStart)
+      handle.removeEventListener('touchmove', onTouchMove)
+      handle.removeEventListener('touchend', onTouchEnd)
+      handle.removeEventListener('touchcancel', onTouchEnd)
+    }
+  }, [habit.id, onDragStart, onDragOver, onDrop, onDragEnd])
 
   function handleSelectDate(dateStr) {
     setSelectedDate((selected) => (selected === dateStr ? null : dateStr))
@@ -289,6 +370,7 @@ function HabitRow({
   return (
     <div
       className={`row ${isDragging ? 'row-dragging' : ''} ${isDragOver ? 'row-drag-over' : ''}`}
+      data-habit-id={habit.id}
       onDragOver={(e) => {
         e.preventDefault()
         onDragOver(habit.id)
@@ -302,6 +384,7 @@ function HabitRow({
         <div className="row-heading-group">
           <span
             className="drag-handle"
+            ref={handleRef}
             draggable
             onDragStart={() => onDragStart(habit.id)}
             onDragEnd={onDragEnd}
@@ -370,12 +453,66 @@ function HabitRow({
               >
                 {showHistory ? 'hide history' : 'history'}
               </button>
-              <button className="edit-btn" onClick={startEditing} aria-label="Rename habit" title="Rename">
-                ✎
-              </button>
-              <button className="delete-btn" onClick={() => onDelete(habit.id)} aria-label="Delete habit" title="Delete">
-                ✕
-              </button>
+              <div className="row-menu" ref={menuRef}>
+                <button
+                  className={`more-btn ${menuOpen ? 'open' : ''}`}
+                  onClick={() => {
+                    setConfirmingDelete(false)
+                    setMenuOpen((open) => !open)
+                  }}
+                  aria-label="More actions"
+                  aria-haspopup="true"
+                  aria-expanded={menuOpen}
+                  title="More"
+                >
+                  ⋯
+                </button>
+                {menuOpen && (
+                  <div className="row-menu-panel">
+                    {confirmingDelete ? (
+                      <div className="row-menu-confirm">
+                        <span className="row-menu-confirm-text">Delete "{habit.name}"?</span>
+                        <div className="row-menu-confirm-actions">
+                          <button
+                            className="row-menu-confirm-btn row-menu-confirm-btn-danger"
+                            onClick={() => {
+                              setMenuOpen(false)
+                              setConfirmingDelete(false)
+                              onDelete(habit.id)
+                            }}
+                          >
+                            Delete
+                          </button>
+                          <button
+                            className="row-menu-confirm-btn"
+                            onClick={() => setConfirmingDelete(false)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          className="row-menu-item"
+                          onClick={() => {
+                            setMenuOpen(false)
+                            startEditing()
+                          }}
+                        >
+                          ✎ Rename
+                        </button>
+                        <button
+                          className="row-menu-item row-menu-item-danger"
+                          onClick={() => setConfirmingDelete(true)}
+                        >
+                          ✕ Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -503,27 +640,31 @@ export default function App() {
     }
   })
   const [habitsLoading, setHabitsLoading] = useState(false)
+  const [habitsSource, setHabitsSource] = useState('guest') // 'guest' | 'account'
   const [importCandidates, setImportCandidates] = useState([])
   const [importing, setImporting] = useState(false)
   const [dragId, setDragId] = useState(null)
   const [overId, setOverId] = useState(null)
 
-  // Guest mode: persist to localStorage. Skipped once signed in, since data
-  // lives in Supabase at that point instead.
+  // Guest-mode persistence. Gated on habitsSource (not session directly) so
+  // this never fires with stale account data still sitting in `habits` —
+  // habitsSource and habits are always flipped together, in the same batch,
+  // whenever we switch data sources (see the effect below).
   useEffect(() => {
-    if (session) return
+    if (habitsSource !== 'guest') return
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(habits))
     } catch {
       // storage unavailable — fail silently, app still works in-session
     }
-  }, [habits, session])
+  }, [habits, habitsSource])
 
   // Load the right data source whenever auth state changes.
   useEffect(() => {
     if (!configured) return
 
     if (session) {
+      setHabitsSource('account')
       loadRemoteHabits(session.user.id)
     } else if (!authLoading) {
       // signed out (including right after sign-out) — fall back to whatever
@@ -534,6 +675,7 @@ export default function App() {
       } catch {
         setHabits([])
       }
+      setHabitsSource('guest')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session])
@@ -828,20 +970,13 @@ export default function App() {
             onSageChange={setSage}
             session={session}
             configured={configured}
+            authLoading={authLoading}
             displayName={profile?.full_name || ''}
             onSaveName={updateDisplayName}
           />
         </div>
       </div>
       <p className="subhead">a running tally of what you show up for</p>
-
-      {!authLoading && (
-        <AuthPanel
-          session={session}
-          configured={configured}
-          displayName={profile?.full_name || session?.user.email}
-        />
-      )}
 
       {importCandidates.length > 0 && (
         <ImportBanner
