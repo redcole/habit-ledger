@@ -355,7 +355,7 @@ function HabitRow({
                 className={`mark-btn ${activeDone ? 'done' : ''}`}
                 onClick={() => onToggleDate(habit.id, activeDate)}
               >
-                {activeDone ? '✓ done' : 'mark'} {selectedDate ? formatShortDate(activeDate) : 'today'}
+                {activeDone ? '✓ done' : 'mark'} {activeDate === today ? 'today' : formatShortDate(activeDate)}
               </button>
               <button
                 className={`skip-btn ${activeSkipped ? 'skipped' : ''}`}
@@ -805,6 +805,12 @@ export default function App() {
     }
   }
 
+  const loggedToday = habits.filter((habit) => {
+    const status = habit.completions[todayStr()]
+    return isDone(status) || isSkipped(status)
+  }).length
+  const todayProgress = habits.length ? Math.round((loggedToday / habits.length) * 100) : 0
+
   return (
     <div className="app">
       <div className="header">
@@ -848,6 +854,26 @@ export default function App() {
 
       <AddHabitForm onAdd={addHabit} />
       <hr className="rule" />
+
+      {!habitsLoading && habits.length > 0 && (
+        <section className="today-progress" aria-label={`Today: ${loggedToday} of ${habits.length} habits logged`}>
+          <div className="today-progress-heading">
+            <span>Today</span>
+            <strong>
+              {loggedToday} of {habits.length} logged
+            </strong>
+          </div>
+          <div
+            className="today-progress-track"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax={habits.length}
+            aria-valuenow={loggedToday}
+          >
+            <div className="today-progress-fill" style={{ width: `${todayProgress}%` }} />
+          </div>
+        </section>
+      )}
 
       {habitsLoading ? (
         <div className="empty">

@@ -487,6 +487,45 @@ button {
   margin: 20px 0;
 }
 
+.today-progress {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px 14px;
+  margin: 0 0 12px;
+}
+
+.today-progress-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: var(--ink-dim);
+  font-size: 12px;
+}
+
+.today-progress-heading strong {
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.today-progress-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--cell-empty);
+}
+
+.today-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sage);
+  transition: width 0.2s ease;
+}
+
 .subhead {
   font-size: 12px;
   color: var(--muted);
