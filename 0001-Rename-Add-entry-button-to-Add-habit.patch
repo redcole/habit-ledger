@@ -1,0 +1,25 @@
+From 11439bb0e05552a614a0e8542ca23f91076adfe8 Mon Sep 17 00:00:00 2001
+From: Cole <cole@habit-ledger.local>
+Date: Mon, 24 Aug 2026 11:04:49 +0000
+Subject: [PATCH] Rename Add entry button to Add habit
+
+---
+ src/App.jsx | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/App.jsx b/src/App.jsx
+index 85fda34..70de24d 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -569,7 +569,7 @@ function AddHabitForm({ onAdd }) {
+         maxLength={60}
+       />
+       <button type="submit" disabled={!value.trim()}>
+-        Add entry
++        Add habit
+       </button>
+     </form>
+   )
+-- 
+2.43.0
+

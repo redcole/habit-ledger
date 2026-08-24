@@ -569,7 +569,7 @@ function AddHabitForm({ onAdd }) {
         maxLength={60}
       />
       <button type="submit" disabled={!value.trim()}>
-        Add entry
+        Add habit
       </button>
     </form>
   )
