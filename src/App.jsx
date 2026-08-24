@@ -539,6 +539,17 @@ function HabitRow({
 
 function AddHabitForm({ onAdd }) {
   const [value, setValue] = useState('')
+  const [isCompact, setIsCompact] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 480px)').matches
+  )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(max-width: 480px)')
+    const handleChange = (e) => setIsCompact(e.matches)
+    mq.addEventListener('change', handleChange)
+    return () => mq.removeEventListener('change', handleChange)
+  }, [])
 
   function submit(e) {
     e.preventDefault()
@@ -552,7 +563,7 @@ function AddHabitForm({ onAdd }) {
     <form className="add-form" onSubmit={submit}>
       <input
         type="text"
-        placeholder="Name a habit — read daily, stretch, no sugar..."
+        placeholder={isCompact ? 'Name a habit...' : 'Name a habit — read daily, stretch, no sugar...'}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         maxLength={60}

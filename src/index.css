@@ -565,6 +565,7 @@ button {
 
 .add-form input {
   flex: 1;
+  min-width: 0;
   background: var(--panel);
   border: 1px solid var(--border);
   color: var(--ink);
@@ -578,6 +579,7 @@ button {
 
 .add-form input::placeholder {
   color: var(--muted);
+  text-overflow: ellipsis;
 }
 
 .add-form input:focus {
@@ -1385,6 +1387,12 @@ button {
     font-size: 18px;
     padding: 8px 10px 8px 4px;
     margin: -8px 0 -8px -4px;
+  }
+  .add-form {
+    flex-direction: column;
+  }
+  .add-form button {
+    padding: 12px 20px;
   }
   .week-days { gap: 4px; }
   .week-day { min-height: 54px; }
