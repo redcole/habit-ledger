@@ -657,6 +657,49 @@ export default function App() {
   const [dragId, setDragId] = useState(null)
   const [overId, setOverId] = useState(null)
 
+  // Two-column layout on wide screens. Rendered as two independent JS-split
+  // columns (rather than CSS grid/columns) so a tall expanded history panel
+  // in one card doesn't force whitespace under a shorter card next to it —
+  // each column just flows on its own.
+  const [isWideLayout, setIsWideLayout] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 900px)').matches
+  )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(min-width: 900px)')
+    const handleChange = (e) => setIsWideLayout(e.matches)
+    mq.addEventListener('change', handleChange)
+    return () => mq.removeEventListener('change', handleChange)
+  }, [])
+
+  const [columnLeft, columnRight] = useMemo(() => {
+    if (!isWideLayout) return [habits, []]
+    const left = []
+    const right = []
+    habits.forEach((h, i) => (i % 2 === 0 ? left : right).push(h))
+    return [left, right]
+  }, [habits, isWideLayout])
+
+  function renderHabitRow(h) {
+    return (
+      <HabitRow
+        key={h.id}
+        habit={h}
+        onToggleDate={toggleDate}
+        onToggleSkip={toggleSkip}
+        onDelete={deleteHabit}
+        onRename={renameHabit}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        onDragEnd={handleDragEnd}
+        isDragging={dragId === h.id}
+        isDragOver={overId === h.id && dragId !== h.id}
+      />
+    )
+  }
+
   // Guest-mode persistence. Gated on habitsSource (not session directly) so
   // this never fires with stale account data still sitting in `habits` —
   // habitsSource and habits are always flipped together, in the same batch,
@@ -1030,25 +1073,13 @@ export default function App() {
           <strong>The ledger is empty.</strong>
           Add your first habit above — every day you mark it, the tally grows.
         </div>
-      ) : (
-        <div className="rows">
-          {habits.map((h) => (
-            <HabitRow
-              key={h.id}
-              habit={h}
-              onToggleDate={toggleDate}
-              onToggleSkip={toggleSkip}
-              onDelete={deleteHabit}
-              onRename={renameHabit}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              onDragEnd={handleDragEnd}
-              isDragging={dragId === h.id}
-              isDragOver={overId === h.id && dragId !== h.id}
-            />
-          ))}
+      ) : isWideLayout ? (
+        <div className="rows-columns">
+          <div className="rows-column">{columnLeft.map(renderHabitRow)}</div>
+          <div className="rows-column">{columnRight.map(renderHabitRow)}</div>
         </div>
+      ) : (
+        <div className="rows">{habits.map(renderHabitRow)}</div>
       )}
 
       <div className="footer">

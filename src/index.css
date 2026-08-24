@@ -1406,13 +1406,18 @@ button {
   .app {
     max-width: 1180px;
   }
-  .rows {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 560px));
-    justify-content: center;
-    column-gap: 20px;
-  }
-  .row {
-    max-width: 560px;
-  }
+}
+
+.rows-columns {
+  display: flex;
+  justify-content: center;
+  gap: 0 20px;
+}
+
+.rows-column {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  max-width: 560px;
+  min-width: 0;
 }
