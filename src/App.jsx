@@ -7,6 +7,8 @@ import ChatWidget from './ChatWidget.jsx'
 
 const STORAGE_KEY = 'habit-ledger-v1'
 const THEME_KEY = 'habit-ledger-theme'
+const ACCENT_KEY = 'habit-ledger-accent'
+const SAGE_KEY = 'habit-ledger-sage'
 const HEATMAP_DAYS = 70 // 10 weeks
 
 // ---------- date helpers (local time, no UTC drift) ----------
@@ -648,6 +650,44 @@ export default function App() {
     setTheme((t) => (t === 'light' ? 'dark' : 'light'))
   }
 
+  const [accent, setAccent] = useState(() => {
+    try {
+      const stored = localStorage.getItem(ACCENT_KEY)
+      if (/^#[0-9a-f]{6}$/i.test(stored || '')) return stored
+    } catch {
+      // ignore
+    }
+    return theme === 'dark' ? '#e3a548' : '#96620e'
+  })
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--amber', accent)
+    try {
+      localStorage.setItem(ACCENT_KEY, accent)
+    } catch {
+      // storage unavailable — accent still applies for this session
+    }
+  }, [accent])
+
+  const [sage, setSage] = useState(() => {
+    try {
+      const stored = localStorage.getItem(SAGE_KEY)
+      if (/^#[0-9a-f]{6}$/i.test(stored || '')) return stored
+    } catch {
+      // ignore
+    }
+    return theme === 'dark' ? '#74ae69' : '#4c7a48'
+  })
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--sage', sage)
+    try {
+      localStorage.setItem(SAGE_KEY, sage)
+    } catch {
+      // storage unavailable — green still applies for this session
+    }
+  }, [sage])
+
   // ---------- habit CRUD (branches on signed-in vs guest) ----------
 
   async function addHabit(name) {
@@ -776,6 +816,10 @@ export default function App() {
           <Settings
             theme={theme}
             onToggleTheme={toggleTheme}
+            accent={accent}
+            onAccentChange={setAccent}
+            sage={sage}
+            onSageChange={setSage}
             session={session}
             configured={configured}
             displayName={profile?.full_name || ''}

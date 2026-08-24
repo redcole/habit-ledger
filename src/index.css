@@ -32,8 +32,8 @@
   --muted: #7c8a90;
   --amber: #e3a548;
   --amber-tint: #4a3d24;
-  --sage: #7c9a72;
-  --sage-tint: #2c3529;
+  --sage: #74ae69;
+  --sage-tint: #294127;
   --skipped: #596267;
   --rust: #b85c4a;
   --cell-empty: #232d31;
@@ -377,6 +377,56 @@ button {
 .settings-theme-btn:hover {
   border-color: var(--amber);
   color: var(--amber);
+}
+
+.color-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.accent-controls,
+.accent-presets {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.accent-swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--swatch-color);
+  cursor: pointer;
+}
+
+.accent-swatch.selected {
+  outline: 2px solid var(--panel);
+  outline-offset: -4px;
+  border-color: var(--ink);
+}
+
+.accent-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  color: var(--ink-dim);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.accent-custom input {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
 }
 
 .settings-name-form {

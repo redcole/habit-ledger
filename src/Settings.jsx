@@ -1,6 +1,52 @@
 import { useEffect, useRef, useState } from 'react'
 
-export default function Settings({ theme, onToggleTheme, session, configured, displayName, onSaveName }) {
+const ACCENT_PRESETS = ['#96620e', '#b45309', '#a34a3a', '#4c7a48', '#2563a8', '#7c3aed']
+const SAGE_PRESETS = ['#4c7a48', '#3f6b3c', '#74ae69', '#2f7d68', '#3d73a8', '#687f42']
+
+function ColorPicker({ label, value, presets, onChange }) {
+  return (
+    <div className="color-picker">
+      <span className="settings-hint">{label}</span>
+      <div className="accent-controls">
+        <div className="accent-presets" aria-label={`${label} presets`}>
+          {presets.map((color) => (
+            <button
+              key={color}
+              type="button"
+              className={`accent-swatch ${value.toLowerCase() === color ? 'selected' : ''}`}
+              style={{ '--swatch-color': color }}
+              onClick={() => onChange(color)}
+              aria-label={`Use ${color} for ${label.toLowerCase()}`}
+              aria-pressed={value.toLowerCase() === color}
+            />
+          ))}
+        </div>
+        <label className="accent-custom" title={`Choose a custom ${label.toLowerCase()}`}>
+          <span>custom</span>
+          <input
+            type="color"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            aria-label={`Choose a custom ${label.toLowerCase()}`}
+          />
+        </label>
+      </div>
+    </div>
+  )
+}
+
+export default function Settings({
+  theme,
+  onToggleTheme,
+  accent,
+  onAccentChange,
+  sage,
+  onSageChange,
+  session,
+  configured,
+  displayName,
+  onSaveName,
+}) {
   const [open, setOpen] = useState(false)
   const [draftName, setDraftName] = useState(displayName || '')
   const [saving, setSaving] = useState(false)
@@ -79,6 +125,8 @@ export default function Settings({ theme, onToggleTheme, session, configured, di
             <button className="settings-theme-btn" onClick={onToggleTheme}>
               {theme === 'light' ? '☾ Switch to dark' : '☀ Switch to light'}
             </button>
+            <ColorPicker label="Primary color" value={sage} presets={SAGE_PRESETS} onChange={onSageChange} />
+            <ColorPicker label="Accent color" value={accent} presets={ACCENT_PRESETS} onChange={onAccentChange} />
           </div>
 
           {configured && session && (
