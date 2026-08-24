@@ -23,6 +23,10 @@ until it's configured.
    `supabase-schema.sql` (included in this project), and run it. This
    creates the `habits` table and locks it down so each account can only
    see its own data.
+
+   If this project was already configured, also run
+   `sql/supabase-migration-007-enforce-habit-ownership.sql`. It restores the
+   database policies that restrict every habit to its owner.
 3. Go to **Project Settings → API** and copy the **Project URL** and the
    **anon/public key**.
 4. In this project folder, copy `.env.example` to a new file named
@@ -87,4 +91,3 @@ scp -r dist/* user@yourserver:/var/www/habit-ledger/
   library — so it's easy to re-theme by editing the variables at the top of
   that file. Both a light and dark theme are included (toggle in the
   header).
-

@@ -481,7 +481,7 @@ export default function App() {
     if (!configured) return
 
     if (session) {
-      loadRemoteHabits()
+      loadRemoteHabits(session.user.id)
     } else if (!authLoading) {
       // signed out (including right after sign-out) — fall back to whatever
       // is in this browser's local storage
@@ -495,11 +495,12 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session])
 
-  async function loadRemoteHabits() {
+  async function loadRemoteHabits(userId) {
     setHabitsLoading(true)
     const { data, error } = await supabase
       .from('habits')
       .select('*')
+      .eq('user_id', userId)
       .order('position', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true })
 
@@ -534,8 +535,11 @@ export default function App() {
   }
 
   async function persistOrder(orderedHabits) {
+    if (!session) return
     await Promise.all(
-      orderedHabits.map((h, idx) => supabase.from('habits').update({ position: idx }).eq('id', h.id))
+      orderedHabits.map((h, idx) =>
+        supabase.from('habits').update({ position: idx }).eq('id', h.id).eq('user_id', session.user.id)
+      )
     )
   }
 
@@ -642,7 +646,7 @@ export default function App() {
     }
     setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, completions } : h)))
     if (session) {
-      await supabase.from('habits').update({ completions }).eq('id', id)
+      await supabase.from('habits').update({ completions }).eq('id', id).eq('user_id', session.user.id)
     }
   }
 
@@ -661,7 +665,7 @@ export default function App() {
     }
     setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, completions } : h)))
     if (session) {
-      await supabase.from('habits').update({ completions }).eq('id', id)
+      await supabase.from('habits').update({ completions }).eq('id', id).eq('user_id', session.user.id)
     }
   }
 
@@ -672,14 +676,14 @@ export default function App() {
   async function deleteHabit(id) {
     setHabits((prev) => prev.filter((h) => h.id !== id))
     if (session) {
-      await supabase.from('habits').delete().eq('id', id)
+      await supabase.from('habits').delete().eq('id', id).eq('user_id', session.user.id)
     }
   }
 
   async function renameHabit(id, newName) {
     setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, name: newName } : h)))
     if (session) {
-      await supabase.from('habits').update({ name: newName }).eq('id', id)
+      await supabase.from('habits').update({ name: newName }).eq('id', id).eq('user_id', session.user.id)
     }
   }
 
