@@ -507,12 +507,25 @@ button {
   margin: 20px 0;
 }
 
+.today-progress-sentinel {
+  height: 0;
+}
+
 .today-progress {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 12px 14px;
   margin: 0 0 12px;
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  z-index: 10;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.today-progress--stuck {
+  border-color: var(--border);
+  box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.35);
 }
 
 .today-progress-heading {

@@ -984,6 +984,22 @@ export default function App() {
   }).length
   const todayProgress = habits.length ? Math.round((loggedToday / habits.length) * 100) : 0
 
+  // ---------- floating progress bar (sticks to top once scrolled past) ----------
+
+  const progressSentinelRef = useRef(null)
+  const [progressStuck, setProgressStuck] = useState(false)
+
+  useEffect(() => {
+    const sentinel = progressSentinelRef.current
+    if (!sentinel) return
+    const observer = new IntersectionObserver(
+      ([entry]) => setProgressStuck(!entry.isIntersecting),
+      { threshold: 0 }
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [habitsLoading, habits.length])
+
   return (
     <div className="app">
       <div className="header">
@@ -1022,23 +1038,29 @@ export default function App() {
       <hr className="rule" />
 
       {!habitsLoading && habits.length > 0 && (
-        <section className="today-progress" aria-label={`Today: ${loggedToday} of ${habits.length} habits logged`}>
-          <div className="today-progress-heading">
-            <span>Today</span>
-            <strong>
-              {loggedToday} of {habits.length} logged
-            </strong>
-          </div>
-          <div
-            className="today-progress-track"
-            role="progressbar"
-            aria-valuemin="0"
-            aria-valuemax={habits.length}
-            aria-valuenow={loggedToday}
+        <>
+          <div className="today-progress-sentinel" ref={progressSentinelRef} />
+          <section
+            className={`today-progress${progressStuck ? ' today-progress--stuck' : ''}`}
+            aria-label={`Today: ${loggedToday} of ${habits.length} habits logged`}
           >
-            <div className="today-progress-fill" style={{ width: `${todayProgress}%` }} />
-          </div>
-        </section>
+            <div className="today-progress-heading">
+              <span>Today</span>
+              <strong>
+                {loggedToday} of {habits.length} logged
+              </strong>
+            </div>
+            <div
+              className="today-progress-track"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax={habits.length}
+              aria-valuenow={loggedToday}
+            >
+              <div className="today-progress-fill" style={{ width: `${todayProgress}%` }} />
+            </div>
+          </section>
+        </>
       )}
 
       {habitsLoading ? (
