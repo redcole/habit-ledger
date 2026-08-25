@@ -182,42 +182,60 @@ function Heatmap({ completions }) {
   )
 }
 
-function WeekOverview({ completions, selectedDate, onSelectDate }) {
+function WeekOverview({ completions, onCycleDate }) {
   const today = todayStr()
   const week = currentWeekDates()
 
   return (
     <div className="week-overview" aria-label="This week">
-      <div className="week-overview-heading">
-        <span>Last 7 days</span>
-      </div>
       <div className="week-days">
         {week.map((dateStr, index) => {
           const status = completions[dateStr]
           const done = isDone(status)
           const skipped = isSkipped(status)
           const isToday = dateStr === today
-          const isSelected = dateStr === selectedDate
           const weekday = new Date(`${dateStr}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short' })
-          const label = `${weekday}, ${formatShortDate(dateStr)}: ${
-            done ? 'completed' : skipped ? 'skipped' : 'not completed'
-          }${isToday ? ' (today)' : ''}${isSelected ? ' (selected)' : ''}`
+          const statusText = done ? 'completed' : skipped ? 'skipped' : 'not completed'
+          const label = `${weekday}, ${formatShortDate(dateStr)}: ${statusText}${
+            isToday ? ' (today)' : ''
+          }. Tap to cycle done, skipped, empty.`
           return (
             <button
               key={dateStr}
               type="button"
-              className={`week-day ${done ? 'done has-status' : ''} ${skipped ? 'skipped has-status' : ''} ${
-                isToday ? 'today' : ''
-              } ${isSelected ? 'selected' : ''}`}
-              onClick={() => onSelectDate(dateStr)}
+              className={`week-day week-day-compact ${done ? 'done has-status' : ''} ${
+                skipped ? 'skipped has-status' : ''
+              } ${isToday ? 'today' : ''}`}
+              onClick={() => onCycleDate(dateStr)}
               title={label}
               aria-label={label}
-              aria-pressed={isSelected}
             >
-              <span className="week-day-name">{weekday}</span>
-              <span className="week-day-number">{dateStr.slice(-2)}</span>
               <span className="week-day-status" aria-hidden="true">{done ? '✓' : skipped ? '–' : ''}</span>
             </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ---------- shared week header, shown once above a column of cards ----------
+
+function WeekColumnHeader() {
+  const today = todayStr()
+  const week = currentWeekDates()
+  return (
+    <div className="week-column-header">
+      <span className="week-column-header-label">Last 7 days</span>
+      <div className="week-days">
+        {week.map((dateStr) => {
+          const isToday = dateStr === today
+          const weekday = new Date(`${dateStr}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short' })
+          return (
+            <div key={dateStr} className={`week-header-cell ${isToday ? 'today' : ''}`}>
+              <span className="week-day-name">{weekday}</span>
+              <span className="week-day-number">{dateStr.slice(-2)}</span>
+            </div>
           )
         })}
       </div>
@@ -229,8 +247,6 @@ function WeekOverview({ completions, selectedDate, onSelectDate }) {
 
 function HabitRow({
   habit,
-  onToggleDate,
-  onToggleSkip,
   onDelete,
   onRename,
   onDragStart,
@@ -239,13 +255,9 @@ function HabitRow({
   onDragEnd,
   isDragging,
   isDragOver,
+  onCycleDate,
 }) {
   const today = todayStr()
-  const [selectedDate, setSelectedDate] = useState(null)
-  const activeDate = selectedDate || today
-  const activeStatus = habit.completions[activeDate]
-  const activeDone = isDone(activeStatus)
-  const activeSkipped = isSkipped(activeStatus)
   const streak = useMemo(() => currentStreak(habit.completions, today), [habit.completions, today])
   const best = useMemo(() => bestStreak(habit.completions), [habit.completions])
 
@@ -334,10 +346,6 @@ function HabitRow({
       handle.removeEventListener('touchcancel', onTouchEnd)
     }
   }, [habit.id, onDragStart, onDragOver, onDrop, onDragEnd])
-
-  function handleSelectDate(dateStr) {
-    setSelectedDate((selected) => (selected === dateStr ? null : dateStr))
-  }
 
   function startEditing() {
     setDraftName(habit.name)
@@ -435,18 +443,6 @@ function HabitRow({
           ) : (
             <>
               <button
-                className={`mark-btn ${activeDone ? 'done' : ''}`}
-                onClick={() => onToggleDate(habit.id, activeDate)}
-              >
-                {activeDone ? '✓ done' : 'mark'} {activeDate === today ? 'today' : formatShortDate(activeDate)}
-              </button>
-              <button
-                className={`skip-btn ${activeSkipped ? 'skipped' : ''}`}
-                onClick={() => onToggleSkip(habit.id, activeDate)}
-              >
-                {activeSkipped ? '↺ unskip' : 'skip'}
-              </button>
-              <button
                 className={`history-btn ${showHistory ? 'open' : ''}`}
                 onClick={() => setShowHistory((open) => !open)}
                 aria-expanded={showHistory}
@@ -519,8 +515,7 @@ function HabitRow({
       </div>
       <WeekOverview
         completions={habit.completions}
-        selectedDate={selectedDate}
-        onSelectDate={handleSelectDate}
+        onCycleDate={(dateStr) => onCycleDate(habit.id, dateStr)}
       />
       {showHistory && (
         <div className="history-panel">
@@ -686,8 +681,7 @@ export default function App() {
       <HabitRow
         key={h.id}
         habit={h}
-        onToggleDate={toggleDate}
-        onToggleSkip={toggleSkip}
+        onCycleDate={cycleDate}
         onDelete={deleteHabit}
         onRename={renameHabit}
         onDragStart={handleDragStart}
@@ -912,11 +906,17 @@ export default function App() {
     ])
   }
 
-  async function toggleDate(id, dateStr) {
+  // Cycles a single day's status: empty -> done -> skipped -> empty. This is
+  // what each day cell in the 7-day strip does now, replacing the separate
+  // "mark today" / "skip" buttons with a direct tap on the day itself.
+  async function cycleDate(id, dateStr) {
     const habit = habits.find((h) => h.id === id)
     if (!habit) return
     const completions = { ...habit.completions }
-    if (isDone(completions[dateStr])) {
+    const current = completions[dateStr]
+    if (isDone(current)) {
+      completions[dateStr] = 'skipped'
+    } else if (isSkipped(current)) {
       delete completions[dateStr]
     } else {
       completions[dateStr] = true
@@ -925,29 +925,6 @@ export default function App() {
     if (session) {
       await supabase.from('habits').update({ completions }).eq('id', id).eq('user_id', session.user.id)
     }
-  }
-
-  async function toggleToday(id) {
-    await toggleDate(id, todayStr())
-  }
-
-  async function toggleSkip(id, dateStr) {
-    const habit = habits.find((h) => h.id === id)
-    if (!habit) return
-    const completions = { ...habit.completions }
-    if (isSkipped(completions[dateStr])) {
-      delete completions[dateStr]
-    } else {
-      completions[dateStr] = 'skipped'
-    }
-    setHabits((prev) => prev.map((h) => (h.id === id ? { ...h, completions } : h)))
-    if (session) {
-      await supabase.from('habits').update({ completions }).eq('id', id).eq('user_id', session.user.id)
-    }
-  }
-
-  async function toggleSkipToday(id) {
-    await toggleSkip(id, todayStr())
   }
 
   async function deleteHabit(id) {
@@ -1075,11 +1052,20 @@ export default function App() {
         </div>
       ) : isWideLayout ? (
         <div className="rows-columns">
-          <div className="rows-column">{columnLeft.map(renderHabitRow)}</div>
-          <div className="rows-column">{columnRight.map(renderHabitRow)}</div>
+          <div className="rows-column">
+            <WeekColumnHeader />
+            {columnLeft.map(renderHabitRow)}
+          </div>
+          <div className="rows-column">
+            {columnRight.length > 0 && <WeekColumnHeader />}
+            {columnRight.map(renderHabitRow)}
+          </div>
         </div>
       ) : (
-        <div className="rows">{habits.map(renderHabitRow)}</div>
+        <div className="rows">
+          <WeekColumnHeader />
+          {habits.map(renderHabitRow)}
+        </div>
       )}
 
       <div className="footer">
