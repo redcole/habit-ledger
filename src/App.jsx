@@ -8,6 +8,7 @@ const STORAGE_KEY = 'habit-ledger-v1'
 const THEME_KEY = 'habit-ledger-theme'
 const ACCENT_KEY = 'habit-ledger-accent'
 const SAGE_KEY = 'habit-ledger-sage'
+const COLUMN_COUNT_KEY = 'habit-ledger-column-count'
 const HEATMAP_DAYS = 70 // 10 weeks
 
 // ---------- date helpers (local time, no UTC drift) ----------
@@ -420,7 +421,7 @@ function HabitRow({
           )}
           <div className="row-meta">
             <TallyMarks count={streak} />
-            <span className="best">best {best}</span>
+            <span className="best">PB {best}</span>
           </div>
           </div>
         </div>
@@ -651,6 +652,21 @@ export default function App() {
   const [importing, setImporting] = useState(false)
   const [dragId, setDragId] = useState(null)
   const [overId, setOverId] = useState(null)
+  const [columnCount, setColumnCount] = useState(() => {
+    try {
+      return localStorage.getItem(COLUMN_COUNT_KEY) === '1' ? 1 : 2
+    } catch {
+      return 2
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLUMN_COUNT_KEY, String(columnCount))
+    } catch {
+      // storage unavailable — preference still applies for this session
+    }
+  }, [columnCount])
 
   // Two-column layout on wide screens. Rendered as two independent JS-split
   // columns (rather than CSS grid/columns) so a tall expanded history panel
@@ -669,12 +685,12 @@ export default function App() {
   }, [])
 
   const [columnLeft, columnRight] = useMemo(() => {
-    if (!isWideLayout) return [habits, []]
+    if (!isWideLayout || columnCount === 1) return [habits, []]
     const left = []
     const right = []
     habits.forEach((h, i) => (i % 2 === 0 ? left : right).push(h))
     return [left, right]
-  }, [habits, isWideLayout])
+  }, [habits, isWideLayout, columnCount])
 
   function renderHabitRow(h) {
     return (
@@ -1001,7 +1017,7 @@ export default function App() {
   }, [habitsLoading, habits.length])
 
   return (
-    <div className="app">
+    <div className={`app ${columnCount === 1 ? 'app-one-column' : ''}`}>
       <div className="header">
         <h1>Habit Ledger</h1>
         <div className="header-right">
@@ -1015,6 +1031,8 @@ export default function App() {
             onAccentChange={setAccent}
             sage={sage}
             onSageChange={setSage}
+            columnCount={columnCount}
+            onColumnCountChange={setColumnCount}
             session={session}
             configured={configured}
             authLoading={authLoading}
@@ -1072,7 +1090,7 @@ export default function App() {
           <strong>The ledger is empty.</strong>
           Add your first habit above — every day you mark it, the tally grows.
         </div>
-      ) : isWideLayout ? (
+      ) : isWideLayout && columnCount === 2 ? (
         <div className="rows-columns">
           <div className="rows-column">
             <WeekColumnHeader />
