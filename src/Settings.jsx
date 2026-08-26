@@ -43,8 +43,6 @@ export default function Settings({
   onAccentChange,
   sage,
   onSageChange,
-  columnCount,
-  onColumnCountChange,
   session,
   configured,
   authLoading,
@@ -133,23 +131,6 @@ export default function Settings({
             <button className="settings-theme-btn" onClick={onToggleTheme}>
               {theme === 'light' ? '☾ Switch to dark' : '☀ Switch to light'}
             </button>
-            <div className="layout-picker">
-              <span className="settings-hint">Habit columns</span>
-              <div className="layout-options" role="group" aria-label="Habit columns">
-                {[1, 2].map((count) => (
-                  <button
-                    key={count}
-                    type="button"
-                    className={columnCount === count ? 'selected' : ''}
-                    onClick={() => onColumnCountChange(count)}
-                    aria-pressed={columnCount === count}
-                  >
-                    {count} column{count === 1 ? '' : 's'}
-                  </button>
-                ))}
-              </div>
-              <span className="settings-hint">Two columns are used on wide screens.</span>
-            </div>
             <ColorPicker label="Primary color" value={sage} presets={SAGE_PRESETS} onChange={onSageChange} />
             <ColorPicker label="Accent color" value={accent} presets={ACCENT_PRESETS} onChange={onAccentChange} />
           </div>

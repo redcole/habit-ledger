@@ -8,7 +8,6 @@ const STORAGE_KEY = 'habit-ledger-v1'
 const THEME_KEY = 'habit-ledger-theme'
 const ACCENT_KEY = 'habit-ledger-accent'
 const SAGE_KEY = 'habit-ledger-sage'
-const COLUMN_COUNT_KEY = 'habit-ledger-column-count'
 const HEATMAP_DAYS = 70 // 10 weeks
 
 // ---------- date helpers (local time, no UTC drift) ----------
@@ -204,39 +203,17 @@ function WeekOverview({ completions, onCycleDate }) {
             <button
               key={dateStr}
               type="button"
-              className={`week-day week-day-compact ${done ? 'done has-status' : ''} ${
+              className={`week-day week-day-expanded ${done ? 'done has-status' : ''} ${
                 skipped ? 'skipped has-status' : ''
               } ${isToday ? 'today' : ''}`}
               onClick={() => onCycleDate(dateStr)}
               title={label}
               aria-label={label}
             >
-              <span className="week-day-status" aria-hidden="true">{done ? '✓' : skipped ? '–' : ''}</span>
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-// ---------- shared week header, shown once above a column of cards ----------
-
-function WeekColumnHeader() {
-  const today = todayStr()
-  const week = currentWeekDates()
-  return (
-    <div className="week-column-header">
-      <span className="week-column-header-label">Last 7 days</span>
-      <div className="week-days">
-        {week.map((dateStr) => {
-          const isToday = dateStr === today
-          const weekday = new Date(`${dateStr}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short' })
-          return (
-            <div key={dateStr} className={`week-header-cell ${isToday ? 'today' : ''}`}>
               <span className="week-day-name">{weekday}</span>
               <span className="week-day-number">{dateStr.slice(-2)}</span>
-            </div>
+              <span className="week-day-status" aria-hidden="true">{done ? '✓' : skipped ? '–' : ''}</span>
+            </button>
           )
         })}
       </div>
@@ -264,12 +241,16 @@ function HabitRow({
 
   const [isEditing, setIsEditing] = useState(false)
   const [draftName, setDraftName] = useState(habit.name)
+  const [expanded, setExpanded] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const menuRef = useRef(null)
   const handleRef = useRef(null)
   const touchDraggingRef = useRef(false)
+  const todayStatus = habit.completions[today]
+  const todayDone = isDone(todayStatus)
+  const todaySkipped = isSkipped(todayStatus)
 
   useEffect(() => {
     if (!menuOpen) return
@@ -378,7 +359,7 @@ function HabitRow({
 
   return (
     <div
-      className={`row ${isDragging ? 'row-dragging' : ''} ${isDragOver ? 'row-drag-over' : ''}`}
+      className={`row ${expanded ? 'row-expanded' : 'row-collapsed'} ${isDragging ? 'row-dragging' : ''} ${isDragOver ? 'row-drag-over' : ''}`}
       data-habit-id={habit.id}
       onDragOver={(e) => {
         e.preventDefault()
@@ -443,13 +424,6 @@ function HabitRow({
             </>
           ) : (
             <>
-              <button
-                className={`history-btn ${showHistory ? 'open' : ''}`}
-                onClick={() => setShowHistory((open) => !open)}
-                aria-expanded={showHistory}
-              >
-                {showHistory ? 'hide history' : 'history'}
-              </button>
               <div className="row-menu" ref={menuRef}>
                 <button
                   className={`more-btn ${menuOpen ? 'open' : ''}`}
@@ -510,21 +484,63 @@ function HabitRow({
                   </div>
                 )}
               </div>
+              <button
+                type="button"
+                className={`expand-btn ${expanded ? 'open' : ''}`}
+                onClick={() => {
+                  setExpanded((open) => {
+                    if (open) setShowHistory(false)
+                    return !open
+                  })
+                }}
+                aria-expanded={expanded}
+                aria-label={expanded ? 'Collapse habit' : 'Expand habit to show the week'}
+              >
+                <span>week</span>
+                <b aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className={`today-cell ${todayDone ? 'done' : ''} ${todaySkipped ? 'skipped' : ''}`}
+                onClick={() => onCycleDate(habit.id, today)}
+                role="checkbox"
+                aria-checked={todayDone ? true : todaySkipped ? 'mixed' : false}
+                aria-label={`Today: ${todayDone ? 'completed' : todaySkipped ? 'skipped' : 'not completed'}. Tap to cycle status.`}
+              >
+                <span>Today</span>
+                <strong aria-hidden="true">{todayDone ? '✓' : todaySkipped ? '–' : ''}</strong>
+              </button>
             </>
           )}
         </div>
       </div>
-      <WeekOverview
-        completions={habit.completions}
-        onCycleDate={(dateStr) => onCycleDate(habit.id, dateStr)}
-      />
-      {showHistory && (
-        <div className="history-panel">
-          <div className="history-heading">
-            <span>Last 10 weeks</span>
-            <span className="history-legend"><i className="legend-done" /> done <i className="legend-skipped" /> skipped</span>
+      {expanded && (
+        <div className="row-details">
+          <div className="row-details-heading">
+            <span>Last 7 days</span>
+            <button
+              type="button"
+              className={`history-btn ${showHistory ? 'open' : ''}`}
+              onClick={() => setShowHistory((open) => !open)}
+              aria-expanded={showHistory}
+            >
+              <span>history</span>
+              <b aria-hidden="true" />
+            </button>
           </div>
-          <Heatmap completions={habit.completions} />
+          <WeekOverview
+            completions={habit.completions}
+            onCycleDate={(dateStr) => onCycleDate(habit.id, dateStr)}
+          />
+          {showHistory && (
+            <div className="history-panel">
+              <div className="history-heading">
+                <span>Last 10 weeks</span>
+                <span className="history-legend"><i className="legend-done" /> done <i className="legend-skipped" /> skipped</span>
+              </div>
+              <Heatmap completions={habit.completions} />
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -652,45 +668,6 @@ export default function App() {
   const [importing, setImporting] = useState(false)
   const [dragId, setDragId] = useState(null)
   const [overId, setOverId] = useState(null)
-  const [columnCount, setColumnCount] = useState(() => {
-    try {
-      return localStorage.getItem(COLUMN_COUNT_KEY) === '1' ? 1 : 2
-    } catch {
-      return 2
-    }
-  })
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(COLUMN_COUNT_KEY, String(columnCount))
-    } catch {
-      // storage unavailable — preference still applies for this session
-    }
-  }, [columnCount])
-
-  // Two-column layout on wide screens. Rendered as two independent JS-split
-  // columns (rather than CSS grid/columns) so a tall expanded history panel
-  // in one card doesn't force whitespace under a shorter card next to it —
-  // each column just flows on its own.
-  const [isWideLayout, setIsWideLayout] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 900px)').matches
-  )
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const mq = window.matchMedia('(min-width: 900px)')
-    const handleChange = (e) => setIsWideLayout(e.matches)
-    mq.addEventListener('change', handleChange)
-    return () => mq.removeEventListener('change', handleChange)
-  }, [])
-
-  const [columnLeft, columnRight] = useMemo(() => {
-    if (!isWideLayout || columnCount === 1) return [habits, []]
-    const left = []
-    const right = []
-    habits.forEach((h, i) => (i % 2 === 0 ? left : right).push(h))
-    return [left, right]
-  }, [habits, isWideLayout, columnCount])
 
   function renderHabitRow(h) {
     return (
@@ -1017,7 +994,7 @@ export default function App() {
   }, [habitsLoading, habits.length])
 
   return (
-    <div className={`app ${columnCount === 1 ? 'app-one-column' : ''}`}>
+    <div className="app">
       <div className="header">
         <h1>Habit Ledger</h1>
         <div className="header-right">
@@ -1031,8 +1008,6 @@ export default function App() {
             onAccentChange={setAccent}
             sage={sage}
             onSageChange={setSage}
-            columnCount={columnCount}
-            onColumnCountChange={setColumnCount}
             session={session}
             configured={configured}
             authLoading={authLoading}
@@ -1090,20 +1065,8 @@ export default function App() {
           <strong>The ledger is empty.</strong>
           Add your first habit above — every day you mark it, the tally grows.
         </div>
-      ) : isWideLayout && columnCount === 2 ? (
-        <div className="rows-columns">
-          <div className="rows-column">
-            <WeekColumnHeader />
-            {columnLeft.map(renderHabitRow)}
-          </div>
-          <div className="rows-column">
-            {columnRight.length > 0 && <WeekColumnHeader />}
-            {columnRight.map(renderHabitRow)}
-          </div>
-        </div>
       ) : (
         <div className="rows">
-          <WeekColumnHeader />
           {habits.map(renderHabitRow)}
         </div>
       )}
