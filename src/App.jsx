@@ -155,6 +155,7 @@ function TallyMarks({ count }) {
 
 function Heatmap({ completions }) {
   const today = todayStr()
+  const scrollRef = useRef(null)
   const cells = []
   for (let i = HEATMAP_DAYS - 1; i >= 0; i--) {
     const dateStr = addDays(today, -i)
@@ -166,8 +167,14 @@ function Heatmap({ completions }) {
       isToday: dateStr === today,
     })
   }
+
+  useEffect(() => {
+    const scroller = scrollRef.current
+    if (scroller) scroller.scrollLeft = scroller.scrollWidth
+  }, [])
+
   return (
-    <div className="heatmap-scroll">
+    <div className="heatmap-scroll" ref={scrollRef}>
       <div className="heatmap" aria-label="Habit history">
         {cells.map((c) => {
           const statusLabel = c.filled ? 'completed' : c.skipped ? 'skipped' : 'not completed'
