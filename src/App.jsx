@@ -131,18 +131,20 @@ function TallyMarks({ count }) {
   if (count === 0) {
     return <span className="tally-label">no streak yet</span>
   }
-  const fullGroups = Math.floor(count / 5)
-  const remainder = count % 5
+  const visibleCount = Math.min(count, 10)
+  const fullGroups = Math.floor(visibleCount / 5)
+  const remainder = visibleCount % 5
   const groups = Array(fullGroups).fill(5)
   if (remainder > 0) groups.push(remainder)
 
   return (
-    <div className="tally">
-      <div className="tally-groups">
+    <div className="tally" title={`${count}-day streak`}>
+      <div className="tally-groups" aria-hidden="true">
         {groups.map((n, i) => (
           <TallyGroup key={i} n={n} />
         ))}
       </div>
+      {count > 10 && <span className="tally-overflow" aria-hidden="true">+</span>}
       <span className="tally-count">{count}</span>
       <span className="tally-label">day{count === 1 ? '' : 's'}</span>
     </div>
@@ -165,19 +167,21 @@ function Heatmap({ completions }) {
     })
   }
   return (
-    <div className="heatmap" aria-label="Habit history">
-      {cells.map((c) => {
-        const statusLabel = c.filled ? 'completed' : c.skipped ? 'skipped' : 'not completed'
-        const label = `${c.dateStr}: ${statusLabel}${c.isToday ? ' (today)' : ''}`
-        return (
-          <span
-            key={c.dateStr}
-            className={`cell ${c.filled ? 'filled' : ''} ${c.skipped ? 'skipped' : ''} ${c.isToday ? 'today' : ''}`}
-            title={label}
-            aria-label={label}
-          />
-        )
-      })}
+    <div className="heatmap-scroll">
+      <div className="heatmap" aria-label="Habit history">
+        {cells.map((c) => {
+          const statusLabel = c.filled ? 'completed' : c.skipped ? 'skipped' : 'not completed'
+          const label = `${c.dateStr}: ${statusLabel}${c.isToday ? ' (today)' : ''}`
+          return (
+            <span
+              key={c.dateStr}
+              className={`cell ${c.filled ? 'filled' : ''} ${c.skipped ? 'skipped' : ''} ${c.isToday ? 'today' : ''}`}
+              title={label}
+              aria-label={label}
+            />
+          )
+        })}
+      </div>
     </div>
   )
 }
