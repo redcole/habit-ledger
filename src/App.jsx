@@ -607,6 +607,7 @@ export default function App() {
 
   const [session, setSession] = useState(null)
   const [authLoading, setAuthLoading] = useState(configured)
+  const [passwordRecovery, setPasswordRecovery] = useState(false)
 
   useEffect(() => {
     if (!configured) return
@@ -614,8 +615,9 @@ export default function App() {
       setSession(data.session)
       setAuthLoading(false)
     })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession)
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true)
     })
     return () => listener.subscription.unsubscribe()
   }, [configured])
@@ -1024,6 +1026,8 @@ export default function App() {
             authLoading={authLoading}
             displayName={profile?.full_name || ''}
             onSaveName={updateDisplayName}
+            passwordRecovery={passwordRecovery}
+            onRecoveryComplete={() => setPasswordRecovery(false)}
           />
         </div>
       </div>

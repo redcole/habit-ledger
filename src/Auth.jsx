@@ -1,7 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 
-export default function AuthPanel({ session, configured, displayName, variant = 'bar' }) {
+export default function AuthPanel({
+  session,
+  configured,
+  displayName,
+  variant = 'bar',
+  passwordRecovery = false,
+  onRecoveryComplete,
+}) {
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState('signin') // 'signin' | 'signup'
   const [fullName, setFullName] = useState('')
@@ -10,6 +17,13 @@ export default function AuthPanel({ session, configured, displayName, variant = 
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showPasswordForm, setShowPasswordForm] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+
+  useEffect(() => {
+    if (passwordRecovery) setShowPasswordForm(true)
+  }, [passwordRecovery])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -47,6 +61,55 @@ export default function AuthPanel({ session, configured, displayName, variant = 
     await supabase.auth.signOut()
   }
 
+  async function handleForgotPassword() {
+    setError('')
+    setInfo('')
+    if (!email.trim()) {
+      setError('Enter your email address first.')
+      return
+    }
+    setLoading(true)
+    const redirectTo = `${window.location.origin}${window.location.pathname}`
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo,
+    })
+    setLoading(false)
+    if (resetError) {
+      setError(resetError.message)
+    } else {
+      setInfo('If an account exists for that email, a password reset link has been sent.')
+    }
+  }
+
+  async function handlePasswordUpdate(e) {
+    e.preventDefault()
+    setError('')
+    setInfo('')
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match.')
+      return
+    }
+    setLoading(true)
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
+    setLoading(false)
+    if (updateError) {
+      setError(updateError.message)
+      return
+    }
+    setNewPassword('')
+    setConfirmPassword('')
+    setShowPasswordForm(false)
+    setInfo('Password updated successfully.')
+    if (passwordRecovery) {
+      window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`)
+      onRecoveryComplete?.()
+    }
+  }
+
   const wrapperClass =
     variant === 'settings' ? 'settings-section settings-account' : 'account-bar'
 
@@ -72,6 +135,44 @@ export default function AuthPanel({ session, configured, displayName, variant = 
         <button className="account-link-btn" onClick={handleSignOut}>
           sign out
         </button>
+        <button
+          className="account-link-btn"
+          onClick={() => {
+            setShowPasswordForm((shown) => !shown)
+            setError('')
+            setInfo('')
+          }}
+        >
+          {showPasswordForm ? 'cancel password change' : 'change password'}
+        </button>
+        {showPasswordForm && (
+          <form className="auth-form password-form" onSubmit={handlePasswordUpdate}>
+            {passwordRecovery && <strong className="password-recovery-title">Choose a new password</strong>}
+            <input
+              type="password"
+              placeholder="new password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+              minLength={6}
+              required
+            />
+            <input
+              type="password"
+              placeholder="confirm new password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+              minLength={6}
+              required
+            />
+            <button type="submit" disabled={loading}>
+              {loading ? '...' : 'update password'}
+            </button>
+          </form>
+        )}
+        {error && <p className="auth-message auth-error">{error}</p>}
+        {info && <p className="auth-message auth-info">{info}</p>}
       </div>
     )
   }
@@ -112,6 +213,11 @@ export default function AuthPanel({ session, configured, displayName, variant = 
           <button type="submit" disabled={loading}>
             {loading ? '...' : mode === 'signin' ? 'sign in' : 'sign up'}
           </button>
+          {mode === 'signin' && (
+            <button type="button" className="account-link-btn" onClick={handleForgotPassword} disabled={loading}>
+              forgot password?
+            </button>
+          )}
           <button
             type="button"
             className="account-link-btn"

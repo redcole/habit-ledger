@@ -48,6 +48,8 @@ export default function Settings({
   authLoading,
   displayName,
   onSaveName,
+  passwordRecovery,
+  onRecoveryComplete,
 }) {
   const [open, setOpen] = useState(false)
   const [draftName, setDraftName] = useState(displayName || '')
@@ -59,6 +61,10 @@ export default function Settings({
   useEffect(() => {
     setDraftName(displayName || '')
   }, [displayName])
+
+  useEffect(() => {
+    if (passwordRecovery) setOpen(true)
+  }, [passwordRecovery])
 
   useEffect(() => {
     if (!open) return
@@ -123,7 +129,14 @@ export default function Settings({
           </div>
 
           {!authLoading && (
-            <AuthPanel session={session} configured={configured} displayName={displayName} variant="settings" />
+            <AuthPanel
+              session={session}
+              configured={configured}
+              displayName={displayName}
+              variant="settings"
+              passwordRecovery={passwordRecovery}
+              onRecoveryComplete={onRecoveryComplete}
+            />
           )}
 
           <div className="settings-section">
